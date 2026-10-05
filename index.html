@@ -40,6 +40,10 @@
             <i data-lucide="plus"></i>
             <span class="btn-text">新增行程</span>
           </button>
+          <button id="btnWishlistMenu" class="btn btn-icon" title="口袋景點庫 (預備地點 / Google Maps 匯入)">
+            <i data-lucide="bookmark"></i>
+            <span class="badge-dot hidden" id="wishlistBadgeDot"></span>
+          </button>
           <button id="btnDataMenu" class="btn btn-icon" title="檔案管理 (JSON / 分享)">
             <i data-lucide="share-2"></i>
           </button>
@@ -127,6 +131,10 @@
         <i data-lucide="plus-circle"></i>
         <span>快速排程</span>
       </button>
+      <button class="float-btn" id="btnFloatWishlist">
+        <i data-lucide="bookmark"></i>
+        <span>口袋景點</span>
+      </button>
       <button class="float-btn" id="btnExportJson">
         <i data-lucide="download"></i>
         <span>備份 JSON</span>
@@ -150,7 +158,12 @@
         <input type="hidden" id="editCardId">
 
         <div class="form-group">
-          <label for="cardTitle">景點 / 活動名稱 *</label>
+          <div class="label-with-action">
+            <label for="cardTitle">景點 / 活動名稱 *</label>
+            <button type="button" id="btnPickFromWishlist" class="btn-text-link">
+              <i data-lucide="bookmark"></i> 從口袋景點選取
+            </button>
+          </div>
           <input type="text" id="cardTitle" required placeholder="例如：晴空塔觀景台、淺草寺雷門、敘敘苑燒肉">
         </div>
 
@@ -326,6 +339,67 @@
             <p>清空當前所有行程卡片，建立一個全新、乾淨的自訂旅遊計畫。</p>
             <button class="btn btn-danger full-width" id="btnActionCreateNewTrip">建立全新空白行程</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Pocket / Wishlist Places (預備景點庫) -->
+  <div id="wishlistModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-wishlist-card">
+      <div class="modal-header">
+        <h3><i data-lucide="bookmark"></i> 口袋景點庫 (預備地點管理)</h3>
+        <button type="button" class="btn-close" id="btnWishlistModalClose">&times;</button>
+      </div>
+
+      <div class="modal-body wishlist-modal-body">
+        <!-- Tab buttons: My Wishlist vs Import from Google Maps -->
+        <div class="wishlist-tabs">
+          <button type="button" class="wishlist-tab active" id="tabWishlistItems">
+            <i data-lucide="list"></i> 我的口袋清單 (<span id="wishlistCount">0</span>)
+          </button>
+          <button type="button" class="wishlist-tab" id="tabWishlistImport">
+            <i data-lucide="import"></i> 批次匯入 Google Maps 清單
+          </button>
+        </div>
+
+        <!-- Panel 1: List of Wishlist items -->
+        <div id="panelWishlistItems" class="wishlist-panel">
+          <!-- Quick add single spot to wishlist -->
+          <div class="wishlist-add-box">
+            <input type="text" id="inputWishlistName" placeholder="快速新增想去的地點名稱...">
+            <input type="text" id="inputWishlistLoc" placeholder="地址或 Google Maps 連結 (選填)">
+            <button type="button" id="btnAddSingleWishlist" class="btn btn-primary btn-sm">
+              <i data-lucide="plus"></i> 加入口袋名單
+            </button>
+          </div>
+
+          <div id="wishlistItemsContainer" class="wishlist-items-container">
+            <!-- Dynamic wishlist item cards -->
+          </div>
+        </div>
+
+        <!-- Panel 2: Batch import from Google Maps / Text list / CSV -->
+        <div id="panelWishlistImport" class="wishlist-panel hidden">
+          <div class="import-instruction-box">
+            <h4>💡 如何從 Google Maps 匯入？</h4>
+            <p>1. 在 Google Maps 手機 App 或網頁版打開您儲存的「想去的地點」清單或分享連結。<br>
+               2. 直接複製文字、多行地點清單，或貼上 Google Maps 地點連結。<br>
+               3. 貼到下方文字框，TravelGoGo 會自動解析名稱與網址，批次存入口袋庫！</p>
+          </div>
+
+          <div class="form-group">
+            <label for="textareaGoogleMapsImport">貼上 Google 地圖分享文字或多行地點清單：</label>
+            <textarea id="textareaGoogleMapsImport" rows="6" placeholder="例如：
+晴空塔 https://maps.app.goo.gl/xxx
+雷門 淺草寺
+敘敘苑 燒肉 新宿中央東口
+SHIBUYA SKY 展望台"></textarea>
+          </div>
+
+          <button type="button" id="btnRunBatchImport" class="btn btn-primary full-width">
+            <i data-lucide="download-cloud"></i> 開始解析並批次匯入
+          </button>
         </div>
       </div>
     </div>

@@ -1221,3 +1221,194 @@ textarea:focus {
   font-weight: 600;
 }
 
+/* ==========================================================================
+   Wishlist / Pocket Places System Styles
+   ========================================================================== */
+.badge-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent-primary);
+}
+
+.label-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-text-link {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-text-link:hover {
+  text-decoration: underline;
+}
+
+.wishlist-modal-body {
+  gap: 14px;
+}
+
+.wishlist-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 10px;
+}
+
+.wishlist-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.wishlist-tab.active {
+  background: var(--accent-gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+.wishlist-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wishlist-add-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-primary);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-subtle);
+}
+
+.wishlist-items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.wishlist-item-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+.wishlist-item-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateX(2px);
+}
+
+.wishlist-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wishlist-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wishlist-item-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.wishlist-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-wishlist-add-to-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-wishlist-add-to-plan:hover {
+  opacity: 0.9;
+}
+
+.btn-wishlist-del {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+.btn-wishlist-del:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.import-instruction-box {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+.import-instruction-box h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+
+

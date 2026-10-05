@@ -82,6 +82,7 @@ function createDefaultEmptyTrip() {
 class TripManager {
   constructor() {
     this.storageKey = 'travelgogo_itinerary_data';
+    this.wishlistStorageKey = 'travelgogo_wishlist_data';
     this.themeKey = 'travelgogo_theme';
     this.currentViewMode = 'timeline'; // 'timeline' | 'cards' | 'route'
     this.selectedTransportType = 'subway';
@@ -90,6 +91,9 @@ class TripManager {
     // Leaflet map instance
     this.leafletMap = null;
     this.mapLayersGroup = null;
+    
+    // Wishlist pool
+    this.wishlist = [];
     
     // Drag state
     this.draggedCardId = null;
@@ -101,9 +105,11 @@ class TripManager {
 
   init() {
     this.loadData();
+    this.loadWishlist();
     this.initTheme();
     this.setupEventListeners();
     this.renderAll();
+    this.renderWishlist();
     this.initLucide();
   }
 
@@ -128,6 +134,24 @@ class TripManager {
 
   saveData() {
     localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+  }
+
+  loadWishlist() {
+    const raw = localStorage.getItem(this.wishlistStorageKey);
+    if (raw) {
+      try {
+        this.wishlist = JSON.parse(raw);
+      } catch (e) {
+        this.wishlist = [];
+      }
+    } else {
+      this.wishlist = [];
+    }
+  }
+
+  saveWishlist() {
+    localStorage.setItem(this.wishlistStorageKey, JSON.stringify(this.wishlist));
+    this.renderWishlist();
   }
 
   initTheme() {
@@ -760,6 +784,47 @@ class TripManager {
         this.showToast('已建立全新空白行程！');
       }
     });
+
+    // Wishlist Modal Events
+    const btnWishlist = document.getElementById('btnWishlistMenu');
+    if (btnWishlist) btnWishlist.addEventListener('click', () => this.openWishlistModal());
+    const btnFloatWishlist = document.getElementById('btnFloatWishlist');
+    if (btnFloatWishlist) btnFloatWishlist.addEventListener('click', () => this.openWishlistModal());
+    document.getElementById('btnWishlistModalClose').addEventListener('click', () => this.closeWishlistModal());
+
+    // Wishlist tabs switch
+    const tabItems = document.getElementById('tabWishlistItems');
+    const tabImport = document.getElementById('tabWishlistImport');
+    const panelItems = document.getElementById('panelWishlistItems');
+    const panelImport = document.getElementById('panelWishlistImport');
+
+    tabItems.addEventListener('click', () => {
+      tabItems.classList.add('active');
+      tabImport.classList.remove('active');
+      panelItems.classList.remove('hidden');
+      panelImport.classList.add('hidden');
+    });
+
+    tabImport.addEventListener('click', () => {
+      tabImport.classList.add('active');
+      tabItems.classList.remove('active');
+      panelImport.classList.remove('hidden');
+      panelItems.classList.add('hidden');
+    });
+
+    // Add single item
+    document.getElementById('btnAddSingleWishlist').addEventListener('click', () => this.handleAddSingleWishlist());
+
+    // Batch import from Google Maps / text list
+    document.getElementById('btnRunBatchImport').addEventListener('click', () => this.handleBatchGoogleMapsImport());
+
+    // Quick pick from wishlist in Card Modal
+    const btnPick = document.getElementById('btnPickFromWishlist');
+    if (btnPick) {
+      btnPick.addEventListener('click', () => {
+        this.openWishlistModal(true); // mode: select
+      });
+    }
   }
 
   populateTimeDropdowns() {
@@ -1048,6 +1113,192 @@ class TripManager {
     this.toastTimer = setTimeout(() => {
       toast.classList.add('hidden');
     }, 2800);
+  }
+
+  // ==========================================================================
+  // Wishlist & Google Maps Batch Import Features
+  // ==========================================================================
+  openWishlistModal(selectMode = false) {
+    this.wishlistSelectMode = selectMode;
+    const modal = document.getElementById('wishlistModal');
+    modal.classList.remove('hidden');
+    
+    // Switch to first tab by default
+    document.getElementById('tabWishlistItems').click();
+    this.renderWishlist();
+    this.initLucide();
+  }
+
+  closeWishlistModal() {
+    document.getElementById('wishlistModal').classList.add('hidden');
+    this.wishlistSelectMode = false;
+  }
+
+  renderWishlist() {
+    const container = document.getElementById('wishlistItemsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const countEl = document.getElementById('wishlistCount');
+    if (countEl) countEl.textContent = this.wishlist.length;
+
+    const dot = document.getElementById('wishlistBadgeDot');
+    if (dot) {
+      dot.classList.toggle('hidden', this.wishlist.length === 0);
+    }
+
+    if (this.wishlist.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:32px 16px;color:var(--text-dim);">
+          <i data-lucide="bookmark" style="width:40px;height:40px;margin-bottom:8px;opacity:0.5;"></i>
+          <p>口袋名單目前是空的</p>
+          <small>您可以在上方快速輸入，或點擊「批次匯入 Google Maps 清單」貼上多個景點！</small>
+        </div>
+      `;
+      this.initLucide();
+      return;
+    }
+
+    this.wishlist.forEach((item, index) => {
+      const card = document.createElement('div');
+      card.className = 'wishlist-item-card';
+      card.innerHTML = `
+        <div class="wishlist-item-main">
+          <div class="wishlist-item-title">📍 ${item.title}</div>
+          <div class="wishlist-item-sub">${item.location || (item.mapLink ? '有 Google Maps 連結' : '尚未設定詳細地址')}</div>
+        </div>
+        <div class="wishlist-item-actions">
+          <button type="button" class="btn-wishlist-add-to-plan" data-idx="${index}">
+            <i data-lucide="${this.wishlistSelectMode ? 'check' : 'plus'}"></i>
+            <span>${this.wishlistSelectMode ? '帶入此點' : '加入行程'}</span>
+          </button>
+          <button type="button" class="btn-wishlist-del" data-idx="${index}" title="從口袋名單刪除">
+            <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
+          </button>
+        </div>
+      `;
+
+      // Add to plan / select handler
+      card.querySelector('.btn-wishlist-add-to-plan').addEventListener('click', () => {
+        this.useWishlistItem(item);
+      });
+
+      // Delete handler
+      card.querySelector('.btn-wishlist-del').addEventListener('click', () => {
+        this.wishlist.splice(index, 1);
+        this.saveWishlist();
+        this.showToast(`已從口袋名單移除「${item.title}」`);
+      });
+
+      container.appendChild(card);
+    });
+
+    this.initLucide();
+  }
+
+  handleAddSingleWishlist() {
+    const nameInput = document.getElementById('inputWishlistName');
+    const locInput = document.getElementById('inputWishlistLoc');
+    const title = nameInput.value.trim();
+    const locOrLink = locInput.value.trim();
+
+    if (!title) {
+      alert('請輸入地點或景點名稱！');
+      return;
+    }
+
+    let mapLink = '';
+    let location = '';
+
+    if (locOrLink.startsWith('http://') || locOrLink.startsWith('https://')) {
+      mapLink = locOrLink;
+      location = title;
+    } else {
+      location = locOrLink || title;
+      mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`;
+    }
+
+    this.wishlist.push({
+      id: `wish_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      title,
+      location,
+      mapLink
+    });
+
+    this.saveWishlist();
+    nameInput.value = '';
+    locInput.value = '';
+    this.showToast(`已將「${title}」加入口袋名單！`);
+  }
+
+  handleBatchGoogleMapsImport() {
+    const textarea = document.getElementById('textareaGoogleMapsImport');
+    const text = textarea.value.trim();
+    if (!text) {
+      alert('請先貼上 Google Maps 景點名稱或網址清單！');
+      return;
+    }
+
+    const lines = text.split('\n');
+    let addedCount = 0;
+
+    lines.forEach(line => {
+      let raw = line.trim();
+      if (!raw) return;
+
+      // Extract URL if line contains http
+      let urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
+      let mapLink = urlMatch ? urlMatch[0] : '';
+      let title = raw.replace(/(https?:\/\/[^\s]+)/, '').trim();
+
+      // Clean prefix numbering like 1., 2. or bullets
+      title = title.replace(/^[\d\.\-\*\•\s]+/, '').trim();
+
+      if (!title && mapLink) {
+        title = "Google Maps 景點";
+      }
+
+      if (title || mapLink) {
+        if (!mapLink && title) {
+          mapLink = `https://maps.google.com/?q=${encodeURIComponent(title)}`;
+        }
+        this.wishlist.push({
+          id: `wish_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          title: title || '自訂目標景點',
+          location: title || '',
+          mapLink: mapLink
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      this.saveWishlist();
+      textarea.value = '';
+      document.getElementById('tabWishlistItems').click();
+      this.showToast(`成功批次匯入 ${addedCount} 個口袋景點！`);
+    } else {
+      alert('未識別到有效的景點內容，請確認貼上的文字格式。');
+    }
+  }
+
+  useWishlistItem(item) {
+    if (this.wishlistSelectMode) {
+      // Direct apply to existing open card modal form fields
+      document.getElementById('cardTitle').value = item.title || '';
+      document.getElementById('cardLocation').value = item.location || item.title || '';
+      document.getElementById('cardMapLink').value = item.mapLink || '';
+      this.closeWishlistModal();
+      this.showToast(`已將「${item.title}」帶入行程表單！`);
+    } else {
+      // Directly open Add Card Modal with this spot prefilled
+      this.closeWishlistModal();
+      this.openAddModal();
+      document.getElementById('cardTitle').value = item.title || '';
+      document.getElementById('cardLocation').value = item.location || item.title || '';
+      document.getElementById('cardMapLink').value = item.mapLink || '';
+      this.showToast(`已開啟快速排程，請選擇時段後儲存！`);
+    }
   }
 }
 
