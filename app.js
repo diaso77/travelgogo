@@ -59,167 +59,24 @@ const KNOWN_GEO_DICT = {
   "taipei": [25.0330, 121.5654]
 };
 
-// Default Initial Demo Itinerary (Tokyo 5 Days) with Geo-coordinates
-const INITIAL_DEMO_DATA = {
-  title: "東京探索自由行 5 天 4 夜",
-  startDate: "2026-10-10",
-  currentDayIndex: 0,
-  days: [
-    {
-      dayNumber: 1,
-      date: "2026-10-10",
-      label: "抵達東京 & 新宿散策",
-      cards: [
-        {
-          id: "card_1_1",
-          title: "抵達羽田機場第3航廈",
-          startTime: "09:00",
-          endTime: "10:30",
-          color: "#38bdf8",
-          location: "東京羽田機場",
-          lat: 35.5494,
-          lng: 139.7798,
-          mapLink: "https://maps.google.com/?q=Tokyo+Haneda+Airport",
-          url: "https://tokyo-haneda.com/",
-          transportType: "subway",
-          transportNote: "搭乘東京單軌電車 (Monorail) 前往濱松町轉 JR 山手線",
-          notes: "出關領乘車票卡 (Suica / Welcome Suica) 與租借 WiFi 機。"
-        },
-        {
-          id: "card_1_2",
-          title: "新宿飯店 Check-in & 放行李",
-          startTime: "11:30",
-          endTime: "12:30",
-          color: "#818cf8",
-          location: "新宿燦路都廣場大飯店",
-          lat: 35.6882,
-          lng: 139.6995,
-          mapLink: "https://maps.google.com/?q=Hotel+Sunroute+Plaza+Shinjuku",
-          url: "",
-          transportType: "walk",
-          transportNote: "飯店步行 3 分鐘即達新宿南口",
-          notes: "櫃台先寄存大型行李，領取房卡準備輕裝出發。"
-        },
-        {
-          id: "card_1_3",
-          title: "午餐：敘敘苑燒肉 (新宿中央東口店)",
-          startTime: "13:00",
-          endTime: "14:30",
-          color: "#fb923c",
-          location: "敘敘苑 新宿中央東口店",
-          lat: 35.6918,
-          lng: 139.7015,
-          mapLink: "https://maps.google.com/?q=Jojoen+Shinjuku",
-          url: "https://www.jojoen.co.jp/",
-          transportType: "walk",
-          transportNote: "步行約 8 分鐘穿過新宿地下街",
-          notes: "已預約超值商業午餐組合，高樓層景觀極佳！"
-        },
-        {
-          id: "card_1_4",
-          title: "明治神宮參道漫步",
-          startTime: "15:00",
-          endTime: "17:00",
-          color: "#34d399",
-          location: "明治神宮",
-          lat: 35.6764,
-          lng: 139.6993,
-          mapLink: "https://maps.google.com/?q=Meiji+Jingu",
-          url: "https://www.meijijingu.or.jp/",
-          transportType: "subway",
-          transportNote: "JR 山手線：新宿站 ➔ 原宿站 (4分鐘)",
-          notes: "參拜祈福，欣賞大鳥居與森林林蔭步道。"
-        },
-        {
-          id: "card_1_5",
-          title: "SHIBUYA SKY 澀谷高空夜景",
-          startTime: "17:30",
-          endTime: "19:30",
-          color: "#c084fc",
-          location: "SHIBUYA SKY",
-          lat: 35.6585,
-          lng: 139.7023,
-          mapLink: "https://maps.google.com/?q=Shibuya+Sky",
-          url: "https://www.shibuya-scramble-square.com/sky/",
-          transportType: "subway",
-          transportNote: "JR 山手線：原宿站 ➔ 澀谷站 (3分鐘)",
-          notes: "★ 預約票時間 17:40，需提早 10 分鐘報到，日落與夜景交替最美時刻！"
-        }
-      ]
-    },
-    {
-      dayNumber: 2,
-      date: "2026-10-11",
-      label: "經典淺草與晴空塔",
-      cards: [
-        {
-          id: "card_2_1",
-          title: "淺草寺雷門 & 仲見世商店街",
-          startTime: "09:30",
-          endTime: "12:00",
-          color: "#fb7185",
-          location: "淺草寺 雷門",
-          lat: 35.7118,
-          lng: 139.7967,
-          mapLink: "https://maps.google.com/?q=Sensoji+Temple",
-          url: "https://www.senso-ji.jp/",
-          transportType: "subway",
-          transportNote: "東京地鐵銀座線直達淺草站",
-          notes: "品嘗人形燒、炸肉餅、抹茶冰淇淋。"
-        },
-        {
-          id: "card_2_2",
-          title: "東京晴空塔展望台 & 晴空街道血拚",
-          startTime: "12:30",
-          endTime: "15:30",
-          color: "#38bdf8",
-          location: "東京晴空塔 Tokyo Skytree",
-          lat: 35.7101,
-          lng: 139.8107,
-          mapLink: "https://maps.google.com/?q=Tokyo+Skytree",
-          url: "https://www.tokyo-skytree.jp/",
-          transportType: "walk",
-          transportNote: "過隅田川水上步道 Sumida River Walk 步行約 15 分鐘",
-          notes: "午餐在晴空街道吃六厘舍沾麵。"
-        }
-      ]
-    },
-    {
-      dayNumber: 3,
-      date: "2026-10-12",
-      label: "東京迪士尼海洋一日遊",
-      cards: [
-        {
-          id: "card_3_1",
-          title: "東京迪士尼海洋 (Fantasy Springs 探險)",
-          startTime: "08:30",
-          endTime: "21:30",
-          color: "#fbbf24",
-          location: "Tokyo DisneySea",
-          lat: 35.6267,
-          lng: 139.8851,
-          mapLink: "https://maps.google.com/?q=Tokyo+DisneySea",
-          url: "https://www.tokyodisneyresort.jp/tc/tds/",
-          transportType: "subway",
-          transportNote: "搭乘 JR 京葉線至舞濱站，轉迪士尼度假區線單軌電車",
-          notes: "入園立即抽取 DPA 與預約 Standby Pass！穿好走的運動鞋。"
-        }
-      ]
-    },
-    {
-      dayNumber: 4,
-      date: "2026-10-13",
-      label: "銀座質感美學與六本木",
-      cards: []
-    },
-    {
-      dayNumber: 5,
-      date: "2026-10-14",
-      label: "最後伴手禮採買 & 返程",
-      cards: []
-    }
-  ]
-};
+// Helper to generate a clean, empty trip structure for a new user
+function createDefaultEmptyTrip() {
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0];
+  return {
+    title: "我的專屬旅遊行程",
+    startDate: dateStr,
+    currentDayIndex: 0,
+    days: [
+      {
+        dayNumber: 1,
+        date: dateStr,
+        label: "Day 1",
+        cards: []
+      }
+    ]
+  };
+}
 
 // Main State Container
 class TripManager {
@@ -256,11 +113,12 @@ class TripManager {
       try {
         this.data = JSON.parse(raw);
       } catch (e) {
-        console.error("Failed to parse local storage data, using fallback demo", e);
-        this.data = JSON.parse(JSON.stringify(INITIAL_DEMO_DATA));
+        console.error("Failed to parse local storage data, creating fresh trip", e);
+        this.data = createDefaultEmptyTrip();
       }
     } else {
-      this.data = JSON.parse(JSON.stringify(INITIAL_DEMO_DATA));
+      // First time user: directly provide a clean, blank trip
+      this.data = createDefaultEmptyTrip();
       this.saveData();
     }
     if (typeof this.data.currentDayIndex !== 'number' || this.data.currentDayIndex >= this.data.days.length) {
@@ -893,13 +751,13 @@ class TripManager {
       document.getElementById('fileJsonInput').click();
     });
     document.getElementById('btnActionCopyCode').addEventListener('click', () => this.copyShareCode());
-    document.getElementById('btnActionResetDemo').addEventListener('click', () => {
-      if (confirm('確定要載入示範範本嗎？現有編輯內容將會被覆蓋。')) {
-        this.data = JSON.parse(JSON.stringify(INITIAL_DEMO_DATA));
+    document.getElementById('btnActionCreateNewTrip').addEventListener('click', () => {
+      if (confirm('確定要清空並建立全新的空白行程嗎？')) {
+        this.data = createDefaultEmptyTrip();
         this.saveData();
         this.closeDataModal();
         this.renderAll();
-        this.showToast('已重新載入示範行程！');
+        this.showToast('已建立全新空白行程！');
       }
     });
   }
