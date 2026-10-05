@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>TravelGoGo - 智能直式旅遊行程規劃神器</title>
-  <meta name="description" content="專為手機直式設計的強大旅遊行程規劃工具，支援半小時時段排程、卡片拖曳重疊、Google Maps 嵌入與預覽、交通方式編輯、JSON 本地匯出匯入與離線存取。">
+  <meta name="description" content="專為手機直式設計的強大旅遊行程規劃工具，支援10分鐘精確排程、卡片拖曳、Google Maps 嵌入與預覽、交通方式編輯、JSON 本地匯出匯入與離線存取。">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
   
   <!-- Google Fonts: Outfit & Noto Sans TC -->
@@ -36,6 +36,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <button id="btnSaveCache" class="btn btn-icon" title="手動儲存到快取 (LocalStorage)">
+            <i data-lucide="save"></i>
+          </button>
           <button id="btnQuickAdd" class="btn btn-primary" title="快速新增行程卡片">
             <i data-lucide="plus"></i>
             <span class="btn-text">新增行程</span>
@@ -100,7 +103,7 @@
     <main class="main-viewport">
       <!-- Vertical Timeline Mode -->
       <div id="timelineContainer" class="timeline-container">
-        <!-- 30-min interval ruler and droppable canvas -->
+        <!-- 10-min interval ruler and droppable canvas -->
         <div class="time-ruler" id="timeRuler"></div>
         <div class="schedule-canvas" id="scheduleCanvas">
           <!-- Schedule cards placed absolutely based on start & duration -->
@@ -145,6 +148,10 @@
       <button class="float-btn" id="btnFloatWishlist">
         <i data-lucide="bookmark"></i>
         <span>口袋景點</span>
+      </button>
+      <button class="float-btn" id="btnUndo" title="復原上一次刪除">
+        <i data-lucide="undo-2"></i>
+        <span>復原刪除</span>
       </button>
       <button class="float-btn" id="btnExportJson">
         <i data-lucide="download"></i>
@@ -193,12 +200,21 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label>主題顯目色調</label>
-          <div class="color-palette" id="colorPalette">
-            <!-- Color options rendered by JS -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="cardCost">預估費用</label>
+            <div class="input-with-icon">
+              <i data-lucide="coins"></i>
+              <input type="number" id="cardCost" placeholder="例如：1500" min="0" step="1">
+            </div>
           </div>
-          <input type="hidden" id="cardColor" value="#3b82f6">
+          <div class="form-group flex-1">
+            <label>主題色調</label>
+            <div class="color-palette" id="colorPalette">
+              <!-- Color options rendered by JS -->
+            </div>
+            <input type="hidden" id="cardColor" value="#38bdf8">
+          </div>
         </div>
 
         <div class="form-group">
@@ -234,6 +250,7 @@
             <button type="button" class="transport-btn" data-type="bus">🚌 公車</button>
             <button type="button" class="transport-btn" data-type="taxi">🚕 計程車</button>
             <button type="button" class="transport-btn" data-type="car">🚗 自駕/租車</button>
+            <button type="button" class="transport-btn" data-type="plane">✈️ 飛機</button>
           </div>
           <input type="text" id="cardTransportNote" placeholder="例如：搭乘銀座線往淺草方向 (車程 15 分鐘，票價 200円)">
         </div>
@@ -263,7 +280,10 @@
     <div class="modal-card modal-detail-card">
       <div class="modal-header" id="detailModalHeader">
         <div class="detail-header-info">
-          <span class="detail-badge" id="detailTimeBadge">09:00 - 10:30</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="detail-badge" id="detailTimeBadge">09:00 - 10:30</span>
+            <span class="detail-cost-badge hidden" id="detailCostBadge">💰 JPY 1,500</span>
+          </div>
           <h3 id="detailTitle">景點標題</h3>
         </div>
         <button type="button" class="btn-close" id="btnDetailClose">&times;</button>
@@ -326,6 +346,21 @@
     </div>
   </div>
 
+  <!-- Modal: Day Picker (Copy/Move target) -->
+  <div id="dayPickerModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-day-picker-card">
+      <div class="modal-header">
+        <h3 id="dayPickerTitle"><i data-lucide="calendar"></i> 選擇目標天數</h3>
+        <button type="button" class="btn-close" id="btnDayPickerClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="dayPickerList" class="day-picker-list">
+          <!-- Dynamically populated day buttons -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Data & Export / Import Management -->
   <div id="dataModal" class="modal-backdrop hidden">
     <div class="modal-card">
@@ -335,6 +370,44 @@
       </div>
       <div class="modal-body data-modal-body">
         <p class="data-intro">所有行程資料皆即時儲存在您本地瀏覽器 (LocalStorage)，無須註冊。您可以隨時匯出 JSON 檔案分享給旅伴，或在不同裝置間同步。</p>
+
+        <!-- Trip Date Range Calendar Picker -->
+        <div class="action-card" style="border-color:var(--accent-primary);">
+          <div class="action-icon"><i data-lucide="calendar-range"></i></div>
+          <h4>🗓️ 旅遊區間日期設定</h4>
+          <p>選擇行程的開始和結束日期，系統會自動產生每日天數標籤。</p>
+          <div class="form-row" style="margin-top:4px;">
+            <div class="form-group flex-1">
+              <label for="tripStartDate">開始日期</label>
+              <input type="date" id="tripStartDate">
+            </div>
+            <div class="form-group flex-1">
+              <label for="tripEndDate">結束日期</label>
+              <input type="date" id="tripEndDate">
+            </div>
+          </div>
+          <button class="btn btn-primary full-width" id="btnApplyDateRange">
+            <i data-lucide="check"></i> 套用日期區間
+          </button>
+        </div>
+
+        <!-- Currency Selector -->
+        <div class="action-card">
+          <div class="action-icon"><i data-lucide="coins"></i></div>
+          <h4>💰 預算幣別設定</h4>
+          <div class="form-row" style="align-items:center;">
+            <select id="currencySelect" style="flex:1;">
+              <option value="TWD">TWD 新台幣</option>
+              <option value="JPY" selected>JPY 日圓</option>
+              <option value="KRW">KRW 韓元</option>
+              <option value="USD">USD 美元</option>
+              <option value="EUR">EUR 歐元</option>
+              <option value="THB">THB 泰銖</option>
+              <option value="CNY">CNY 人民幣</option>
+            </select>
+            <span id="totalBudgetDisplay" style="font-size:0.85rem;font-weight:700;color:var(--accent-amber);white-space:nowrap;">總預算：JPY 0</span>
+          </div>
+        </div>
 
         <div class="action-grid">
           <div class="action-card" id="cardDownloadJson">
@@ -356,6 +429,13 @@
             <h4>複製行程分享代碼</h4>
             <p>將目前行程壓縮成字串直接複製，方便透過 LINE 或通訊軟體傳送。</p>
             <button class="btn btn-secondary full-width" id="btnActionCopyCode">複製代碼</button>
+          </div>
+
+          <div class="action-card" id="cardPasteCode">
+            <div class="action-icon"><i data-lucide="clipboard-paste"></i></div>
+            <h4>貼上分享代碼匯入</h4>
+            <p>將旅伴分享的行程代碼貼上，即可匯入他的完整行程。</p>
+            <button class="btn btn-secondary full-width" id="btnActionPasteCode">貼上代碼匯入</button>
           </div>
 
           <div class="action-card danger-card">

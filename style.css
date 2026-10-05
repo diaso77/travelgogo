@@ -1,6 +1,6 @@
 /* ==========================================================================
    TravelGoGo - Design System & Modern Responsive Stylesheet
-   Tailored for Vertical Mobile First, Timeline, Card Overlays & Rich Aesthetics
+   10-min slot timeline, Vertical Mobile First, Card Overlays & Rich Aesthetics
    ========================================================================== */
 
 :root {
@@ -29,8 +29,8 @@
   --danger: #ef4444;
   --danger-hover: #dc2626;
   
-  --slot-height: 48px; /* 30 minutes slot height */
-  --time-col-width: 64px;
+  --slot-height: 20px; /* 10-min slot height */
+  --time-col-width: 56px;
   
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -93,7 +93,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  max-width: 680px; /* Optimal mobile-first vertical view */
+  max-width: 680px;
   margin: 0 auto;
   position: relative;
   background-color: var(--bg-primary);
@@ -163,7 +163,7 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Buttons */
@@ -224,6 +224,11 @@ body {
 .btn-icon:hover {
   background: var(--bg-card-hover);
   color: var(--accent-primary);
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.8rem;
 }
 
 /* Day Selector Tabs Bar */
@@ -298,6 +303,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding-top: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .day-summary-info {
@@ -328,6 +335,38 @@ body {
   background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: var(--radius-full);
+}
+
+.header-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Multi-day Span Pills */
+.span-range-pills {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.pill-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+.pill-btn.active {
+  background: var(--accent-primary);
+  color: #fff;
 }
 
 .view-switchers {
@@ -362,17 +401,18 @@ body {
   flex: 1;
   position: relative;
   overflow-y: auto;
-  padding-bottom: 90px; /* Space for bottom floating bar */
+  padding-bottom: 90px;
 }
 
 .timeline-container {
   display: flex;
   position: relative;
-  min-height: calc(48 * var(--slot-height)); /* 24 hours * 2 = 48 slots */
+  /* 144 slots * 20px = 2880px */
+  min-height: calc(144 * var(--slot-height));
   padding: 8px 12px 24px 0;
 }
 
-/* Time Ruler (30 mins steps) */
+/* Time Ruler (10-min grid, labels every 30 min) */
 .time-ruler {
   width: var(--time-col-width);
   flex-shrink: 0;
@@ -385,27 +425,40 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0;
   color: var(--text-dim);
-  border-bottom: 1px dashed var(--border-subtle);
+  border-bottom: 1px dashed rgba(255,255,255,0.03);
   position: relative;
   box-sizing: border-box;
 }
 
 .time-slot-label.hour-mark {
   color: var(--text-muted);
+  font-size: 0.7rem;
   font-weight: 700;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.time-slot-label.half-mark {
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-bottom: 1px dashed var(--border-subtle);
 }
 
 /* Schedule Droppable Canvas */
 .schedule-canvas {
   flex: 1;
   position: relative;
-  background-size: 100% calc(var(--slot-height) * 2);
-  background-image: linear-gradient(to bottom, transparent calc(var(--slot-height) - 1px), var(--border-subtle) calc(var(--slot-height) - 1px), var(--border-subtle) var(--slot-height), transparent var(--slot-height));
   border-left: 1px solid var(--border-subtle);
+  /* Background grid: hour lines every 6 slots (6*20=120px) */
+  background-size: 100% 120px;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 119px,
+    var(--border-subtle) 119px,
+    var(--border-subtle) 120px
+  );
 }
 
 /* Schedule Activity Card on Canvas */
@@ -414,15 +467,15 @@ body {
   left: 6px;
   right: 6px;
   border-radius: var(--radius-md);
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: var(--bg-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
-  border-left: 6px solid var(--accent-primary);
+  border-left: 5px solid var(--accent-primary);
   box-shadow: var(--shadow-md);
   cursor: pointer;
-  touch-action: pan-y; /* Allow normal vertical scrolling unless dragging handle */
+  touch-action: pan-y;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   display: flex;
   flex-direction: column;
@@ -447,7 +500,7 @@ body {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
   cursor: grab;
-  touch-action: none; /* Crucial: prevent browser scrolling when touching drag handle */
+  touch-action: none;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .card-drag-handle:hover {
@@ -466,19 +519,17 @@ body {
   pointer-events: none;
 }
 
-/* Overlapping multi-card layout styles (e.g. side-by-side or layered columns) */
-.activity-card.col-left {
-  right: 51%;
-}
-.activity-card.col-right {
-  left: 51%;
+/* Multi-day card compact */
+.activity-card.multi-day-card {
+  padding: 3px 6px;
+  font-size: 0.72rem;
 }
 
 .card-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .card-title-group {
@@ -487,22 +538,32 @@ body {
 }
 
 .card-title {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .card-time-span {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.card-cost-badge {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-amber);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 4px;
 }
 
 .card-badges {
@@ -534,8 +595,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
-  font-size: 0.75rem;
+  margin-top: 2px;
+  font-size: 0.7rem;
 }
 
 .card-location {
@@ -556,7 +617,7 @@ body {
   color: var(--accent-primary);
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -564,17 +625,17 @@ body {
 /* Transportation Indicator Between Cards */
 .transit-indicator {
   position: absolute;
-  left: 20px;
-  right: 20px;
-  height: 24px;
+  left: 16px;
+  right: 16px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   background: rgba(30, 41, 59, 0.85);
   border: 1px dashed var(--accent-primary);
   border-radius: var(--radius-full);
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--accent-primary);
   z-index: 5;
@@ -583,6 +644,61 @@ body {
 }
 .transit-indicator:hover {
   background: rgba(56, 189, 248, 0.2);
+}
+
+/* Current Time Line Indicator */
+.current-time-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--danger);
+  z-index: 30;
+  pointer-events: none;
+}
+.current-time-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  background: var(--danger);
+  border-radius: 50%;
+}
+.current-time-label {
+  position: absolute;
+  right: 4px;
+  top: -8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: var(--bg-primary);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* Timeline Empty State */
+.timeline-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+.timeline-empty-state h3 {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  margin: 12px 0 8px;
+}
+.timeline-empty-state p {
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+.empty-state-icon {
+  font-size: 3rem;
 }
 
 /* List Mode View */
@@ -628,13 +744,13 @@ body {
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
-  max-width: 500px;
+  max-width: 520px;
   background: var(--bg-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  padding: 8px 14px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -650,7 +766,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
   transition: color var(--transition-fast);
@@ -761,6 +877,8 @@ label {
 
 input[type="text"],
 input[type="url"],
+input[type="number"],
+input[type="date"],
 select,
 textarea {
   width: 100%;
@@ -780,6 +898,14 @@ select:focus,
 textarea:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* Date input styling */
+input[type="date"] {
+  color-scheme: dark;
+}
+[data-theme="light"] input[type="date"] {
+  color-scheme: light;
 }
 
 .input-with-icon {
@@ -805,13 +931,13 @@ textarea:focus {
 /* Color Palette Selector */
 .color-palette {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .color-swatch {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-full);
   cursor: pointer;
   border: 2px solid transparent;
@@ -834,12 +960,12 @@ textarea:focus {
   margin-bottom: 6px;
 }
 .transport-btn {
-  padding: 6px 12px;
+  padding: 6px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   cursor: pointer;
   font-weight: 500;
   transition: all var(--transition-fast);
@@ -897,6 +1023,15 @@ textarea:focus {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--accent-primary);
+}
+
+.detail-cost-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.12);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
 }
 
 .detail-transport-box {
@@ -1002,6 +1137,12 @@ textarea:focus {
 }
 
 /* Data Modal Action Grid */
+.data-intro {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
 .action-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1031,6 +1172,10 @@ textarea:focus {
   line-height: 1.4;
 }
 
+.action-icon {
+  color: var(--accent-primary);
+}
+
 .full-width {
   width: 100%;
 }
@@ -1051,6 +1196,8 @@ textarea:focus {
   font-weight: 600;
   z-index: 200;
   animation: toastIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-width: 90%;
+  text-align: center;
 }
 
 @keyframes toastIn {
@@ -1068,6 +1215,12 @@ textarea:focus {
     border-left: 1px solid var(--border-subtle);
     border-right: 1px solid var(--border-subtle);
   }
+}
+
+@media (max-width: 420px) {
+  .header-actions .btn-text { display: none; }
+  .header-actions { gap: 4px; }
+  .span-range-pills { display: none; }
 }
 
 /* ==========================================================================
@@ -1100,101 +1253,73 @@ textarea:focus {
 .route-summary-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--text-main);
 }
 
 .route-summary-sub {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.78rem;
-  white-space: nowrap;
 }
 
 .route-leaflet-map {
   width: 100%;
-  height: 380px;
+  height: 300px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
   overflow: hidden;
-  box-shadow: var(--shadow-md);
-  z-index: 5;
+  border: 1px solid var(--border-subtle);
+  z-index: 1;
 }
 
-/* Custom Leaflet Node Pin Marker */
-.custom-map-node {
-  background: transparent;
-  border: none;
-}
-
-.node-pin-bubble {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 0.85rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 3px #ffffff;
-  transition: transform var(--transition-fast);
-  cursor: pointer;
-}
-.node-pin-bubble:hover {
-  transform: scale(1.2);
-}
-
-/* Stepper Node Sequence List below the Map */
 .route-stepper-box {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
-
 .route-stepper-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.88rem;
   font-weight: 700;
-  color: var(--accent-primary);
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: 8px;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  margin-bottom: 14px;
 }
-
 .route-stepper-list {
   display: flex;
   flex-direction: column;
-  position: relative;
+  gap: 0;
 }
 
+/* Custom map marker */
+.custom-map-node { background: transparent !important; border: none !important; }
+.node-pin-bubble {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 0.75rem; font-weight: 800;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Stepper node */
 .stepper-node-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  padding: 10px 0;
   position: relative;
-  padding-bottom: 18px;
   cursor: pointer;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-sm);
+  padding: 8px;
 }
-.stepper-node-item:last-child {
-  padding-bottom: 0;
+.stepper-node-item:hover {
+  background: rgba(56, 189, 248, 0.05);
 }
-
-/* Vertical line connecting nodes */
 .stepper-line {
   position: absolute;
-  left: 14px;
-  top: 30px;
-  bottom: 0;
+  top: 36px;
+  left: 22px;
   width: 2px;
+  bottom: -2px;
   background: var(--border-subtle);
   z-index: 1;
 }
@@ -1257,6 +1382,184 @@ textarea:focus {
   color: var(--accent-primary);
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+/* ==========================================================================
+   Day Context Menu
+   ========================================================================== */
+.day-context-menu {
+  animation: fadeIn 0.15s ease forwards;
+}
+
+.ctx-menu-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 0;
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+}
+
+.ctx-menu-title {
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.ctx-menu-item:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+.ctx-menu-item.ctx-menu-danger {
+  color: var(--danger);
+}
+.ctx-menu-item.ctx-menu-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ==========================================================================
+   Day Picker Modal
+   ========================================================================== */
+.modal-day-picker-card {
+  max-width: 400px;
+}
+
+.day-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  width: 100%;
+}
+.day-picker-item:hover:not(.disabled) {
+  border-color: var(--accent-primary);
+  transform: translateX(4px);
+}
+.day-picker-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.day-picker-badge {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.day-picker-date {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.day-picker-count {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+/* ==========================================================================
+   Multi-Day Span View
+   ========================================================================== */
+.timeline-container.multi-day-mode {
+  flex-direction: column;
+  min-height: auto;
+  padding: 8px 8px 24px;
+}
+
+.multi-day-header-row {
+  display: flex;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-primary);
+  padding-bottom: 4px;
+}
+
+.multi-day-ruler-header {
+  width: var(--time-col-width);
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 4px;
+}
+
+.multi-day-col-header {
+  flex: 1;
+  text-align: center;
+  padding: 6px 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.multi-day-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.multi-day-date {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  display: block;
+}
+
+.multi-day-columns {
+  display: flex;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.multi-day-ruler-col {
+  width: var(--time-col-width);
+  flex-shrink: 0;
+}
+
+.multi-day-col {
+  flex: 1;
+  border-left: 1px solid var(--border-subtle);
+  background-size: 100% 120px;
+  background-image: linear-gradient(to bottom, transparent 119px, var(--border-subtle) 119px, var(--border-subtle) 120px);
+}
+
+.multi-day-empty {
+  text-align: center;
+  padding: 20px 4px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
 }
 
 /* ==========================================================================
@@ -1448,5 +1751,3 @@ textarea:focus {
   color: var(--accent-primary);
   margin-bottom: 4px;
 }
-
-

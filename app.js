@@ -1,107 +1,119 @@
 /**
- * TravelGoGo - Core Application Logic
- * Features:
- * - 30-min vertical timeline calculation
- * - Multi-day switching & dynamic day creation
- * - Drag and drop card rescheduling (drag up/down to adjust 30m slots)
- * - Overlap detection & visual side-by-side / offset layout
- * - Interactive Route Map: Target Nodes, sequential polylines, transport mode tags & Google Multi-stop Route URL
- * - Google Maps URL parsing & automatic interactive embed
- * - JSON LocalStorage persistence, import, export & share code
- * - Transport method selection between spots
+ * TravelGoGo - Core Application Logic (v3.0)
+ * 
+ * Key features:
+ * - 10-min interval vertical timeline from 00:00-24:00
+ * - Calendar date-range picker (auto-generates days)
+ * - Multi-day span view (1/3/5/7 day columns)
+ * - Drag-and-drop with confirmation
+ * - Overlap detection & side-by-side layout
+ * - Route map: Leaflet nodes, polylines, transport tags, Google route URL
+ * - Google Maps URL parsing & interactive embed
+ * - Budget/cost tracking per card & daily/total summary
+ * - Manual save-to-cache button
+ * - JSON LocalStorage, import, export, share code, paste-import
+ * - Wishlist/pocket places with batch Google Maps list import
+ * - Copy & Move card to other day via modal
+ * - Delete day, Undo last card deletion
+ * - Transport: subway, walk, bus, taxi, car, plane
  */
 
-// Preset Theme Color Choices for cards
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const SLOT_MINUTES = 10;
+const TOTAL_SLOTS  = 144;          // 24h * 60min / 10min
+const SLOT_HEIGHT  = 20;           // px per 10-min slot
+const START_HOUR   = 0;            // timeline begins at 00:00
+
 const COLOR_PRESETS = [
-  '#38bdf8', // Ocean Sky Blue
-  '#818cf8', // Indigo
-  '#c084fc', // Lavender Purple
-  '#34d399', // Emerald Mint
-  '#fbbf24', // Warm Amber
-  '#fb7185', // Rose Pink
-  '#fb923c', // Sunset Coral
-  '#2dd4bf'  // Cyan Turquoise
+  '#38bdf8', '#818cf8', '#c084fc', '#34d399',
+  '#fbbf24', '#fb7185', '#fb923c', '#2dd4bf'
 ];
 
-// Transport icons/emoji dictionary
 const TRANSPORT_MAP = {
   subway: '🚇 地鐵/火車',
-  walk: '🚶 步行',
-  bus: '🚌 公車',
-  taxi: '🚕 計程車',
-  car: '🚗 自駕/租車'
+  walk:   '🚶 步行',
+  bus:    '🚌 公車',
+  taxi:   '🚕 計程車',
+  car:    '🚗 自駕/租車',
+  plane:  '✈️ 飛機'
 };
 
-// Known coordinates dictionary for instant mapping without geocoding delays
 const KNOWN_GEO_DICT = {
-  "羽田": [35.5494, 139.7798],
-  "haneda": [35.5494, 139.7798],
-  "新宿": [35.6909, 139.7003],
-  "shinjuku": [35.6909, 139.7003],
-  "敘敘苑": [35.6918, 139.7015],
-  "jojoen": [35.6918, 139.7015],
-  "明治神宮": [35.6764, 139.6993],
-  "meiji": [35.6764, 139.6993],
-  "shibuya sky": [35.6585, 139.7023],
-  "澀谷": [35.6595, 139.7005],
-  "shibuya": [35.6595, 139.7005],
-  "淺草": [35.7148, 139.7967],
-  "sensoji": [35.7148, 139.7967],
-  "晴空塔": [35.7101, 139.8107],
-  "skytree": [35.7101, 139.8107],
-  "迪士尼": [35.6267, 139.8851],
-  "disney": [35.6267, 139.8851],
-  "銀座": [35.6719, 139.7640],
-  "ginza": [35.6719, 139.7640],
-  "六本木": [35.6628, 139.7313],
-  "roppongi": [35.6628, 139.7313],
-  "台北": [25.0330, 121.5654],
-  "taipei": [25.0330, 121.5654]
+  "羽田":[35.5494,139.7798],"haneda":[35.5494,139.7798],
+  "成田":[35.7720,140.3929],"narita":[35.7720,140.3929],
+  "新宿":[35.6909,139.7003],"shinjuku":[35.6909,139.7003],
+  "敘敘苑":[35.6918,139.7015],"jojoen":[35.6918,139.7015],
+  "明治神宮":[35.6764,139.6993],"meiji":[35.6764,139.6993],
+  "shibuya sky":[35.6585,139.7023],
+  "澀谷":[35.6595,139.7005],"shibuya":[35.6595,139.7005],
+  "淺草":[35.7148,139.7967],"sensoji":[35.7148,139.7967],
+  "晴空塔":[35.7101,139.8107],"skytree":[35.7101,139.8107],
+  "迪士尼":[35.6267,139.8851],"disney":[35.6267,139.8851],
+  "銀座":[35.6719,139.7640],"ginza":[35.6719,139.7640],
+  "六本木":[35.6628,139.7313],"roppongi":[35.6628,139.7313],
+  "台北":[25.0330,121.5654],"taipei":[25.0330,121.5654],
+  "東京車站":[35.6812,139.7671],"tokyo station":[35.6812,139.7671],
+  "秋葉原":[35.6984,139.7731],"akihabara":[35.6984,139.7731],
+  "池袋":[35.7295,139.7109],"ikebukuro":[35.7295,139.7109],
+  "上野":[35.7141,139.7774],"ueno":[35.7141,139.7774],
+  "原宿":[35.6702,139.7026],"harajuku":[35.6702,139.7026],
+  "表參道":[35.6653,139.7121],"omotesando":[35.6653,139.7121],
+  "台場":[35.6268,139.7753],"odaiba":[35.6268,139.7753],
+  "京都":[35.0116,135.7681],"kyoto":[35.0116,135.7681],
+  "大阪":[34.6937,135.5023],"osaka":[34.6937,135.5023],
+  "首爾":[37.5665,126.9780],"seoul":[37.5665,126.9780],
+  "曼谷":[13.7563,100.5018],"bangkok":[13.7563,100.5018]
 };
 
-// Helper to generate a clean, empty trip structure for a new user
+const CURRENCY_OPTIONS = ['TWD','JPY','KRW','USD','EUR','THB','CNY'];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function createDefaultEmptyTrip() {
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0];
+  const ds = today.toISOString().split('T')[0];
   return {
-    title: "我的專屬旅遊行程",
-    startDate: dateStr,
+    title: '我的專屬旅遊行程',
+    startDate: ds,
+    endDate: ds,
+    currency: 'JPY',
     currentDayIndex: 0,
-    days: [
-      {
-        dayNumber: 1,
-        date: dateStr,
-        label: "Day 1",
-        cards: []
-      }
-    ]
+    days: [{ dayNumber:1, date:ds, label:'Day 1', cards:[] }]
   };
 }
 
-// Main State Container
+function dateDiffDays(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+
+function formatDateStr(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+  return `${d.getMonth()+1}/${d.getDate()}(${wd})`;
+}
+
+// ── Main Class ───────────────────────────────────────────────────────────────
+
 class TripManager {
   constructor() {
-    this.storageKey = 'travelgogo_itinerary_data';
+    this.storageKey         = 'travelgogo_itinerary_data';
     this.wishlistStorageKey = 'travelgogo_wishlist_data';
-    this.themeKey = 'travelgogo_theme';
-    this.currentViewMode = 'timeline'; // 'timeline' | 'cards' | 'route'
+    this.themeKey           = 'travelgogo_theme';
+    this.currentViewMode    = 'timeline';
     this.selectedTransportType = 'subway';
-    this.selectedColor = COLOR_PRESETS[0];
-    
-    // Leaflet map instance
-    this.leafletMap = null;
-    this.mapLayersGroup = null;
-    
-    // Wishlist pool
-    this.wishlist = [];
-    
-    // Drag state
-    this.draggedCardId = null;
-    this.dragStartY = 0;
-    this.dragStartSlot = 0;
-    
+    this.selectedColor      = COLOR_PRESETS[0];
+    this.currentSpanDays    = 1;
+    this.leafletMap         = null;
+    this.mapLayersGroup     = null;
+    this.wishlist           = [];
+    this.undoStack          = [];
+    this.timeIndicatorInterval = null;
+    this.wishlistSelectMode = false;
     this.init();
   }
+
+  // ── Init ─────────────────────────────────────────────────────────────────
 
   init() {
     this.loadData();
@@ -111,25 +123,23 @@ class TripManager {
     this.renderAll();
     this.renderWishlist();
     this.initLucide();
+    this.startTimeIndicator();
   }
 
   loadData() {
     const raw = localStorage.getItem(this.storageKey);
     if (raw) {
-      try {
-        this.data = JSON.parse(raw);
-      } catch (e) {
-        console.error("Failed to parse local storage data, creating fresh trip", e);
-        this.data = createDefaultEmptyTrip();
-      }
+      try { this.data = JSON.parse(raw); }
+      catch(e) { this.data = createDefaultEmptyTrip(); }
     } else {
-      // First time user: directly provide a clean, blank trip
       this.data = createDefaultEmptyTrip();
       this.saveData();
     }
-    if (typeof this.data.currentDayIndex !== 'number' || this.data.currentDayIndex >= this.data.days.length) {
+    if (typeof this.data.currentDayIndex !== 'number' || this.data.currentDayIndex >= this.data.days.length)
       this.data.currentDayIndex = 0;
-    }
+    if (!this.data.currency) this.data.currency = 'JPY';
+    if (!this.data.startDate) this.data.startDate = this.data.days[0]?.date || new Date().toISOString().split('T')[0];
+    if (!this.data.endDate) this.data.endDate = this.data.days[this.data.days.length-1]?.date || this.data.startDate;
   }
 
   saveData() {
@@ -138,15 +148,8 @@ class TripManager {
 
   loadWishlist() {
     const raw = localStorage.getItem(this.wishlistStorageKey);
-    if (raw) {
-      try {
-        this.wishlist = JSON.parse(raw);
-      } catch (e) {
-        this.wishlist = [];
-      }
-    } else {
-      this.wishlist = [];
-    }
+    try { this.wishlist = raw ? JSON.parse(raw) : []; }
+    catch(e) { this.wishlist = []; }
   }
 
   saveWishlist() {
@@ -155,245 +158,365 @@ class TripManager {
   }
 
   initTheme() {
-    const savedTheme = localStorage.getItem(this.themeKey) || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    this.updateThemeIcon(savedTheme);
+    const t = localStorage.getItem(this.themeKey) || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    this.updateThemeIcon(t);
   }
 
   toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem(this.themeKey, next);
-    this.updateThemeIcon(next);
+    const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    const nxt = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nxt);
+    localStorage.setItem(this.themeKey, nxt);
+    this.updateThemeIcon(nxt);
   }
 
   updateThemeIcon(theme) {
-    const icon = document.getElementById('themeIcon');
-    if (icon) {
-      icon.setAttribute('data-lucide', theme === 'dark' ? 'sun' : 'moon');
-      this.initLucide();
-    }
+    const el = document.getElementById('themeIcon');
+    if (el) { el.setAttribute('data-lucide', theme === 'dark' ? 'sun' : 'moon'); this.initLucide(); }
   }
 
-  initLucide() {
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
+  initLucide() { if (window.lucide) window.lucide.createIcons(); }
+
+  getCurrentDay() { return this.data.days[this.data.currentDayIndex] || this.data.days[0]; }
+
+  // ── Time helpers (10-min slots from 00:00) ───────────────────────────────
+
+  timeToSlot(timeStr) {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return Math.max(0, Math.min(TOTAL_SLOTS, Math.round((h * 60 + m) / SLOT_MINUTES)));
   }
 
-  getCurrentDay() {
-    return this.data.days[this.data.currentDayIndex] || this.data.days[0];
+  slotToTime(slot) {
+    const totalMin = Math.round(slot * SLOT_MINUTES);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
 
-  // --- Rendering Functions ---
+  // ── Current time indicator ───────────────────────────────────────────────
+
+  startTimeIndicator() {
+    this.updateTimeIndicator();
+    this.timeIndicatorInterval = setInterval(() => this.updateTimeIndicator(), 60000);
+  }
+
+  updateTimeIndicator() {
+    const old = document.querySelector('.current-time-line');
+    if (old) old.remove();
+    const now = new Date();
+    const totalMin = now.getHours() * 60 + now.getMinutes();
+    const slot = totalMin / SLOT_MINUTES;
+    const topPx = slot * SLOT_HEIGHT;
+    const canvas = document.getElementById('scheduleCanvas');
+    if (!canvas || this.currentViewMode !== 'timeline' || this.currentSpanDays > 1) return;
+    const line = document.createElement('div');
+    line.className = 'current-time-line';
+    line.style.top = `${topPx}px`;
+    const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    line.innerHTML = `<span class="current-time-label">${ts}</span>`;
+    canvas.appendChild(line);
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────────────
+
   renderAll() {
     this.renderHeader();
     this.renderDayTabs();
-    this.renderTimeRuler();
-    this.renderSchedule();
-    this.renderCardsList();
-    if (this.currentViewMode === 'route') {
-      this.renderRouteMap();
+    if (this.currentSpanDays > 1) {
+      this.renderMultiDayView();
+    } else {
+      this.renderTimeRuler();
+      this.renderSchedule();
     }
+    this.renderCardsList();
+    if (this.currentViewMode === 'route') this.renderRouteMap();
     this.initLucide();
+    this.updateTimeIndicator();
+    this.updateUndoButton();
   }
 
   renderHeader() {
-    const titleEl = document.getElementById('tripTitleDisplay');
-    const datesEl = document.getElementById('tripDatesDisplay');
-    titleEl.textContent = this.data.title;
-    
-    const count = this.data.days.length;
-    datesEl.textContent = `${this.data.days[0]?.date || ''} - ${this.data.days[count - 1]?.date || ''} (${count} 天)`;
+    document.getElementById('tripTitleDisplay').textContent = this.data.title;
+    const n = this.data.days.length;
+    const s = this.data.days[0]?.date || '';
+    const e = this.data.days[n-1]?.date || '';
+    document.getElementById('tripDatesDisplay').textContent = `${s} ~ ${e} (${n} 天)`;
   }
 
   renderDayTabs() {
     const container = document.getElementById('dayTabsList');
     container.innerHTML = '';
-
-    this.data.days.forEach((day, index) => {
+    this.data.days.forEach((day, i) => {
       const tab = document.createElement('button');
-      tab.className = `day-tab ${index === this.data.currentDayIndex ? 'active' : ''}`;
-      tab.innerHTML = `<span>Day ${day.dayNumber}</span><small style="opacity:0.8">${day.date.slice(5)}</small>`;
-      tab.addEventListener('click', () => {
-        this.data.currentDayIndex = index;
-        this.saveData();
-        this.renderAll();
-      });
+      tab.className = `day-tab ${i === this.data.currentDayIndex ? 'active' : ''}`;
+      tab.innerHTML = `<span>Day ${day.dayNumber}</span><small style="opacity:0.8">${formatDateStr(day.date)}</small>`;
+      tab.addEventListener('click', () => { this.data.currentDayIndex = i; this.saveData(); this.renderAll(); });
+      tab.addEventListener('contextmenu', (e) => { e.preventDefault(); this.showDayContextMenu(i, e); });
       container.appendChild(tab);
     });
 
-    const currentDay = this.getCurrentDay();
-    document.getElementById('currentDayBadge').textContent = `Day ${currentDay.dayNumber}`;
-    document.getElementById('currentDayDateText').textContent = currentDay.label || currentDay.date;
-    document.getElementById('currentDayCardCount').textContent = `${currentDay.cards.length} 個行程`;
+    const cur = this.getCurrentDay();
+    document.getElementById('currentDayBadge').textContent = `Day ${cur.dayNumber}`;
+    const budget = cur.cards.reduce((s, c) => s + (parseFloat(c.cost) || 0), 0);
+    const d = new Date(cur.date + 'T00:00:00');
+    const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+    document.getElementById('currentDayDateText').textContent =
+      `${d.getMonth()+1}月${d.getDate()}日 (週${wd})`;
+    let info = `${cur.cards.length} 個行程`;
+    if (budget > 0) info += ` ・ ${this.data.currency} ${budget.toLocaleString()}`;
+    document.getElementById('currentDayCardCount').textContent = info;
   }
 
-  // Build 30-min time ruler from 06:00 to 24:00 (36 slots of 30 mins)
+  // ── Day context menu ─────────────────────────────────────────────────────
+
+  showDayContextMenu(dayIndex, event) {
+    document.querySelectorAll('.day-context-menu').forEach(m => m.remove());
+    const day = this.data.days[dayIndex];
+    const menu = document.createElement('div');
+    menu.className = 'day-context-menu';
+    menu.style.cssText = `position:fixed;left:${Math.min(event.clientX, innerWidth-180)}px;top:${event.clientY}px;z-index:999;`;
+    menu.innerHTML = `
+      <div class="ctx-menu-card">
+        <div class="ctx-menu-title">Day ${day.dayNumber} (${day.date})</div>
+        <button class="ctx-menu-item" data-action="edit-date"><i data-lucide="calendar" style="width:14px;height:14px;"></i> 修改日期</button>
+        <button class="ctx-menu-item" data-action="edit-label"><i data-lucide="pen-line" style="width:14px;height:14px;"></i> 修改標籤</button>
+        ${this.data.days.length > 1 ? `<button class="ctx-menu-item ctx-menu-danger" data-action="delete-day"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> 刪除此天</button>` : ''}
+      </div>`;
+    document.body.appendChild(menu);
+    this.initLucide();
+    const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
+    setTimeout(() => document.addEventListener('click', close), 10);
+    menu.querySelectorAll('.ctx-menu-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.action;
+        menu.remove(); document.removeEventListener('click', close);
+        if (act === 'edit-date') {
+          const nd = prompt(`修改 Day ${day.dayNumber} 的日期 (YYYY-MM-DD)：`, day.date);
+          if (nd && /^\d{4}-\d{2}-\d{2}$/.test(nd)) { day.date = nd; this.saveData(); this.renderAll(); this.showToast(`已更新日期為 ${nd}`); }
+        } else if (act === 'edit-label') {
+          const nl = prompt(`修改 Day ${day.dayNumber} 的標籤：`, day.label || `Day ${day.dayNumber}`);
+          if (nl !== null) { day.label = nl.trim() || `Day ${day.dayNumber}`; this.saveData(); this.renderAll(); }
+        } else if (act === 'delete-day') {
+          if (confirm(`確定要刪除 Day ${day.dayNumber} 嗎？\n其中 ${day.cards.length} 個行程卡片也會一併刪除。`)) {
+            this.data.days.splice(dayIndex, 1);
+            this.data.days.forEach((d, i) => d.dayNumber = i + 1);
+            if (this.data.currentDayIndex >= this.data.days.length) this.data.currentDayIndex = this.data.days.length - 1;
+            this.saveData(); this.renderAll(); this.showToast('已刪除該天行程');
+          }
+        }
+      });
+    });
+  }
+
+  // ── Time ruler (10-min, labels every 30 min) ─────────────────────────────
+
   renderTimeRuler() {
     const ruler = document.getElementById('timeRuler');
     ruler.innerHTML = '';
-    
-    for (let slot = 0; slot < 36; slot++) {
-      const totalMinutes = (6 * 60) + (slot * 30);
-      const h = Math.floor(totalMinutes / 60);
-      const m = totalMinutes % 60;
-      const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      
-      const slotEl = document.createElement('div');
-      slotEl.className = `time-slot-label ${m === 0 ? 'hour-mark' : ''}`;
-      slotEl.textContent = timeStr;
-      ruler.appendChild(slotEl);
+    for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
+      const totalMin = slot * SLOT_MINUTES;
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      const el = document.createElement('div');
+      el.className = 'time-slot-label';
+      if (m === 0) {
+        el.classList.add('hour-mark');
+        el.textContent = `${String(h).padStart(2,'0')}:00`;
+      } else if (m === 30) {
+        el.classList.add('half-mark');
+        el.textContent = `${String(h).padStart(2,'0')}:30`;
+      }
+      // 10-min and 20-min marks are blank (just grid lines)
+      ruler.appendChild(el);
     }
   }
 
-  // Helper to convert HH:MM to slot index (0 = 06:00)
-  timeToSlot(timeStr) {
-    if (!timeStr) return 0;
-    const [h, m] = timeStr.split(':').map(Number);
-    const totalMinutes = h * 60 + m;
-    const startMinutes = 6 * 60; // 06:00
-    const slot = (totalMinutes - startMinutes) / 30;
-    return Math.max(0, Math.min(36, slot));
+  // ── Multi-day span view ──────────────────────────────────────────────────
+
+  renderMultiDayView() {
+    const container = document.getElementById('timelineContainer');
+    container.innerHTML = '';
+    container.classList.add('multi-day-mode');
+
+    const startIdx = this.data.currentDayIndex;
+    const endIdx = Math.min(startIdx + this.currentSpanDays, this.data.days.length);
+    const vis = this.data.days.slice(startIdx, endIdx);
+
+    // Header
+    const hdr = document.createElement('div');
+    hdr.className = 'multi-day-header-row';
+    const rh = document.createElement('div');
+    rh.className = 'multi-day-ruler-header';
+    rh.textContent = '時間';
+    hdr.appendChild(rh);
+    vis.forEach(day => {
+      const ch = document.createElement('div');
+      ch.className = 'multi-day-col-header';
+      ch.innerHTML = `<span class="multi-day-label">D${day.dayNumber}</span><span class="multi-day-date">${formatDateStr(day.date)}</span>`;
+      hdr.appendChild(ch);
+    });
+    container.appendChild(hdr);
+
+    // Columns
+    const wrap = document.createElement('div');
+    wrap.className = 'multi-day-columns';
+
+    // Ruler col
+    const rc = document.createElement('div');
+    rc.className = 'multi-day-ruler-col';
+    for (let s = 0; s < TOTAL_SLOTS; s++) {
+      const tm = s * SLOT_MINUTES;
+      const h = Math.floor(tm / 60), m = tm % 60;
+      const el = document.createElement('div');
+      el.className = 'time-slot-label';
+      if (m === 0) { el.classList.add('hour-mark'); el.textContent = `${String(h).padStart(2,'0')}:00`; }
+      else if (m === 30) { el.classList.add('half-mark'); el.textContent = `${String(h).padStart(2,'0')}:30`; }
+      rc.appendChild(el);
+    }
+    wrap.appendChild(rc);
+
+    // Day cols
+    vis.forEach((day, di) => {
+      const col = document.createElement('div');
+      col.className = 'multi-day-col';
+      col.style.position = 'relative';
+      col.style.minHeight = `${TOTAL_SLOTS * SLOT_HEIGHT}px`;
+      const sorted = [...day.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+      sorted.forEach(card => {
+        const ss = this.timeToSlot(card.startTime);
+        const es = Math.max(ss + 1, this.timeToSlot(card.endTime));
+        const top = ss * SLOT_HEIGHT;
+        const ht = Math.max(24, (es - ss) * SLOT_HEIGHT - 2);
+        const ce = document.createElement('div');
+        ce.className = 'activity-card multi-day-card';
+        ce.style.cssText = `top:${top}px;height:${ht}px;border-left-color:${card.color || '#38bdf8'}`;
+        ce.innerHTML = `<div class="card-title" style="font-size:0.72rem;">${card.title}</div><div class="card-time-span" style="font-size:0.6rem;">${card.startTime}-${card.endTime}</div>`;
+        ce.addEventListener('click', () => { this.data.currentDayIndex = startIdx + di; this.openDetailModal(card); });
+        col.appendChild(ce);
+      });
+      if (sorted.length === 0) {
+        const em = document.createElement('div');
+        em.className = 'multi-day-empty';
+        em.textContent = '尚無行程';
+        col.appendChild(em);
+      }
+      wrap.appendChild(col);
+    });
+    container.appendChild(wrap);
   }
 
-  // Helper to convert slot index back to HH:MM string
-  slotToTime(slot) {
-    const totalMinutes = (6 * 60) + Math.round(slot * 30);
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  }
+  // ── Single-day schedule ──────────────────────────────────────────────────
 
-  // Render cards on the vertical canvas
   renderSchedule() {
+    const container = document.getElementById('timelineContainer');
+    container.classList.remove('multi-day-mode');
+
+    // Ensure structure exists
+    if (!document.getElementById('timeRuler') || !document.getElementById('scheduleCanvas')) {
+      container.innerHTML = '<div class="time-ruler" id="timeRuler"></div><div class="schedule-canvas" id="scheduleCanvas"></div>';
+      this.renderTimeRuler();
+    }
+
     const canvas = document.getElementById('scheduleCanvas');
     canvas.innerHTML = '';
+    const cur = this.getCurrentDay();
+    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
 
-    const currentDay = this.getCurrentDay();
-    const sortedCards = [...currentDay.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    if (sorted.length === 0) {
+      canvas.innerHTML = `
+        <div class="timeline-empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>這一天還沒有行程安排</h3>
+          <p>點擊下方「快速排程」或右上角「新增行程」開始規劃吧！</p>
+          <button class="btn btn-primary" onclick="window.tripManager.openAddModal()"><i data-lucide="plus"></i> 新增第一個行程</button>
+        </div>`;
+      this.initLucide();
+      return;
+    }
 
-    // Calculate layout for overlaps
-    const layoutInfo = this.calculateOverlapLayout(sortedCards);
+    const layout = this.calculateOverlapLayout(sorted);
 
-    sortedCards.forEach((card, index) => {
-      const startSlot = this.timeToSlot(card.startTime);
-      const endSlot = Math.max(startSlot + 1, this.timeToSlot(card.endTime));
-      const durationSlots = endSlot - startSlot;
+    sorted.forEach((card, idx) => {
+      const ss = this.timeToSlot(card.startTime);
+      const es = Math.max(ss + 1, this.timeToSlot(card.endTime));
+      const dur = es - ss;
+      const top = ss * SLOT_HEIGHT;
+      const ht = Math.max(32, dur * SLOT_HEIGHT - 4);
 
-      const topPx = startSlot * 48; // 48px per slot
-      const heightPx = Math.max(44, (durationSlots * 48) - 6);
+      const el = document.createElement('div');
+      el.className = 'activity-card';
+      el.id = `activity_${card.id}`;
+      el.dataset.cardId = card.id;
+      el.style.cssText = `top:${top}px;height:${ht}px;border-left-color:${card.color || '#38bdf8'}`;
 
-      const cardEl = document.createElement('div');
-      cardEl.className = 'activity-card';
-      cardEl.id = `activity_${card.id}`;
-      cardEl.dataset.cardId = card.id;
-      cardEl.style.top = `${topPx}px`;
-      cardEl.style.height = `${heightPx}px`;
-      cardEl.style.borderLeftColor = card.color || '#38bdf8';
-
-      // Apply overlap styling if overlapping
-      const layout = layoutInfo[card.id];
-      if (layout && layout.totalCols > 1) {
-        const widthPercent = (100 / layout.totalCols) - 2;
-        const leftPercent = layout.colIndex * (100 / layout.totalCols) + 1;
-        cardEl.style.left = `${leftPercent}%`;
-        cardEl.style.width = `${widthPercent}%`;
-        cardEl.style.right = 'auto';
+      const lay = layout[card.id];
+      if (lay && lay.totalCols > 1) {
+        const wp = (100 / lay.totalCols) - 2;
+        const lp = lay.colIndex * (100 / lay.totalCols) + 1;
+        el.style.left = `${lp}%`; el.style.width = `${wp}%`; el.style.right = 'auto';
       }
 
-      const transportLabel = TRANSPORT_MAP[card.transportType] || '';
+      const tLabel = TRANSPORT_MAP[card.transportType] || '';
+      const costHtml = (card.cost && parseFloat(card.cost) > 0)
+        ? `<span class="card-cost-badge">${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</span>` : '';
 
-      cardEl.innerHTML = `
+      el.innerHTML = `
         <div class="card-top">
           <div class="card-title-group">
             <h4 class="card-title">${card.title}</h4>
-            <div class="card-time-span">
-              <i data-lucide="clock" style="width:12px;height:12px;"></i>
-              <span>${card.startTime} - ${card.endTime}</span>
-            </div>
+            <div class="card-time-span"><i data-lucide="clock" style="width:12px;height:12px;"></i><span>${card.startTime} - ${card.endTime}</span>${costHtml}</div>
           </div>
           <div class="card-badges">
-            ${card.mapLink ? `<span class="badge-icon-btn" title="有 Google 地圖定位"><i data-lucide="map-pin" style="width:13px;height:13px;"></i></span>` : ''}
-            ${card.url ? `<span class="badge-icon-btn" title="有外鏈網站"><i data-lucide="link" style="width:13px;height:13px;"></i></span>` : ''}
-            <span class="card-drag-handle" title="按住拖曳調整 30 分鐘時段"><i data-lucide="grip-vertical" style="width:14px;height:14px;"></i></span>
+            ${card.mapLink ? '<span class="badge-icon-btn" title="有 Google 地圖定位"><i data-lucide="map-pin" style="width:13px;height:13px;"></i></span>' : ''}
+            <span class="card-drag-handle" title="按住拖曳調整時段"><i data-lucide="grip-vertical" style="width:14px;height:14px;"></i></span>
           </div>
         </div>
         <div class="card-bottom">
-          <span class="card-location">
-            ${card.location ? `📍 ${card.location}` : '無特定地點'}
-          </span>
-          ${card.transportType ? `
-            <span class="card-transport-badge" title="${card.transportNote || transportLabel}">
-              ${transportLabel.split(' ')[0]}
-            </span>
-          ` : ''}
-        </div>
-      `;
+          <span class="card-location">${card.location ? `📍 ${card.location}` : '無特定地點'}</span>
+          ${card.transportType ? `<span class="card-transport-badge">${tLabel.split(' ')[0]}</span>` : ''}
+        </div>`;
 
-      // Click to view details / edit
-      cardEl.addEventListener('click', (e) => {
-        if (!cardEl.classList.contains('is-dragging')) {
-          this.openDetailModal(card);
-        }
-      });
+      el.addEventListener('click', (e) => { if (!el.classList.contains('is-dragging')) this.openDetailModal(card); });
+      this.attachDragEvents(el, card, ss, dur);
+      canvas.appendChild(el);
 
-      // Drag and Drop implementation for 30m slots
-      this.attachDragEvents(cardEl, card, startSlot, durationSlots);
-
-      canvas.appendChild(cardEl);
-
-      // Render Transit line between consecutive cards if next card exists
-      if (index < sortedCards.length - 1) {
-        const nextCard = sortedCards[index + 1];
-        const nextStartSlot = this.timeToSlot(nextCard.startTime);
-        if (nextStartSlot >= endSlot) {
-          const transitTop = endSlot * 48;
-          const transitHeight = (nextStartSlot - endSlot) * 48;
-          if (transitHeight >= 20 && nextCard.transportNote) {
-            const transitEl = document.createElement('div');
-            transitEl.className = 'transit-indicator';
-            transitEl.style.top = `${transitTop + (transitHeight / 2) - 12}px`;
-            transitEl.innerHTML = `
-              <span>${TRANSPORT_MAP[nextCard.transportType] || '🚗 交通'}：${nextCard.transportNote}</span>
-            `;
-            transitEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              this.openEditModal(nextCard);
-            });
-            canvas.appendChild(transitEl);
+      // Transit indicator
+      if (idx < sorted.length - 1) {
+        const next = sorted[idx + 1];
+        const ns = this.timeToSlot(next.startTime);
+        if (ns >= es && next.transportNote) {
+          const tTop = es * SLOT_HEIGHT;
+          const tHt = (ns - es) * SLOT_HEIGHT;
+          if (tHt >= 16) {
+            const te = document.createElement('div');
+            te.className = 'transit-indicator';
+            te.style.top = `${tTop + (tHt / 2) - 10}px`;
+            te.innerHTML = `<span>${TRANSPORT_MAP[next.transportType] || '🚗 交通'}：${next.transportNote}</span>`;
+            te.addEventListener('click', (e) => { e.stopPropagation(); this.openEditModal(next); });
+            canvas.appendChild(te);
           }
         }
       }
     });
-
     this.initLucide();
   }
 
-  // Handle simultaneous or overlapping cards side-by-side
   calculateOverlapLayout(cards) {
     const layout = {};
     for (let i = 0; i < cards.length; i++) {
       const c1 = cards[i];
-      const start1 = this.timeToSlot(c1.startTime);
-      const end1 = this.timeToSlot(c1.endTime);
-      
-      const overlapping = [c1];
+      const s1 = this.timeToSlot(c1.startTime), e1 = this.timeToSlot(c1.endTime);
+      const over = [c1];
       for (let j = 0; j < cards.length; j++) {
         if (i === j) continue;
-        const c2 = cards[j];
-        const start2 = this.timeToSlot(c2.startTime);
-        const end2 = this.timeToSlot(c2.endTime);
-        if (start1 < end2 && end1 > start2) {
-          overlapping.push(c2);
-        }
+        const s2 = this.timeToSlot(cards[j].startTime), e2 = this.timeToSlot(cards[j].endTime);
+        if (s1 < e2 && e1 > s2) over.push(cards[j]);
       }
-
-      if (overlapping.length > 1) {
-        overlapping.sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime) || a.id.localeCompare(b.id));
-        const colIndex = overlapping.findIndex(c => c.id === c1.id);
-        layout[c1.id] = { colIndex, totalCols: Math.min(overlapping.length, 2) };
+      if (over.length > 1) {
+        over.sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime) || a.id.localeCompare(b.id));
+        layout[c1.id] = { colIndex: over.findIndex(c => c.id === c1.id), totalCols: Math.min(over.length, 2) };
       } else {
         layout[c1.id] = { colIndex: 0, totalCols: 1 };
       }
@@ -401,428 +524,270 @@ class TripManager {
     return layout;
   }
 
-  // Touch and Mouse Drag to move 30m vertical slot
-  attachDragEvents(element, card, originalStartSlot, durationSlots) {
-    let startY = 0;
-    let initialTop = 0;
-    let hasMoved = false;
-    let scrollInterval = null;
-    const viewport = document.querySelector('.main-viewport');
+  // ── Drag & Drop ──────────────────────────────────────────────────────────
 
+  attachDragEvents(element, card, origSlot, durSlots) {
+    let startY = 0, initTop = 0, moved = false, scrollIv = null;
+    const viewport = document.querySelector('.main-viewport');
     const handle = element.querySelector('.card-drag-handle');
     if (!handle) return;
 
-    const onPointerDown = (e) => {
-      // ONLY allow drag if initiated from the drag handle icon
+    const onDown = (e) => {
       if (!e.target.closest('.card-drag-handle')) return;
       e.stopPropagation();
+      startY = e.clientY || e.touches?.[0]?.clientY;
+      initTop = parseFloat(element.style.top) || 0;
+      moved = false;
 
-      startY = e.clientY || (e.touches && e.touches[0].clientY);
-      initialTop = parseFloat(element.style.top) || 0;
-      hasMoved = false;
-
-      const checkEdgeAutoScroll = (currentClientY) => {
-        if (!viewport) return;
-        const rect = viewport.getBoundingClientRect();
-        const topThreshold = rect.top + 60;
-        const bottomThreshold = rect.bottom - 60;
-
-        clearInterval(scrollInterval);
-        scrollInterval = null;
-
-        if (currentClientY < topThreshold) {
-          // Near top boundary: auto scroll up
-          scrollInterval = setInterval(() => {
-            viewport.scrollTop -= 14;
-          }, 30);
-        } else if (currentClientY > bottomThreshold) {
-          // Near bottom boundary: auto scroll down
-          scrollInterval = setInterval(() => {
-            viewport.scrollTop += 14;
-          }, 30);
+      const onMove = (me) => {
+        const cy = me.clientY || me.touches?.[0]?.clientY;
+        const dy = cy - startY;
+        if (Math.abs(dy) > 6) { moved = true; element.classList.add('is-dragging'); }
+        if (moved) {
+          if (me.cancelable) me.preventDefault();
+          let nt = Math.max(0, Math.min((TOTAL_SLOTS - 1) * SLOT_HEIGHT, initTop + dy));
+          element.style.top = `${nt}px`;
+          // Edge auto-scroll
+          if (viewport) {
+            const r = viewport.getBoundingClientRect();
+            clearInterval(scrollIv); scrollIv = null;
+            if (cy < r.top + 50) scrollIv = setInterval(() => viewport.scrollTop -= 12, 30);
+            else if (cy > r.bottom - 50) scrollIv = setInterval(() => viewport.scrollTop += 12, 30);
+          }
         }
       };
 
-      const onPointerMove = (moveEvent) => {
-        const currentY = moveEvent.clientY || (moveEvent.touches && moveEvent.touches[0].clientY);
-        const deltaY = currentY - startY;
-
-        if (Math.abs(deltaY) > 8) {
-          hasMoved = true;
-          element.classList.add('is-dragging');
-        }
-
-        if (hasMoved) {
-          if (moveEvent.cancelable) moveEvent.preventDefault(); // Prevent native page scroll while dragging handle
-          let newTop = initialTop + deltaY;
-          newTop = Math.max(0, Math.min(35 * 48, newTop));
-          element.style.top = `${newTop}px`;
-          checkEdgeAutoScroll(currentY);
-        }
-      };
-
-      const onPointerUp = (upEvent) => {
-        window.removeEventListener('mousemove', onPointerMove);
-        window.removeEventListener('mouseup', onPointerUp);
-        window.removeEventListener('touchmove', onPointerMove);
-        window.removeEventListener('touchend', onPointerUp);
-        clearInterval(scrollInterval);
-        scrollInterval = null;
-
-        if (hasMoved) {
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+        clearInterval(scrollIv);
+        if (moved) {
           element.classList.remove('is-dragging');
-          const finalTop = parseFloat(element.style.top);
-          const newSlot = Math.round(finalTop / 48);
-          const newStartTime = this.slotToTime(newSlot);
-          const newEndTime = this.slotToTime(newSlot + durationSlots);
-
-          // If time didn't change
-          if (newStartTime === card.startTime) {
-            element.style.top = `${initialTop}px`;
-            return;
-          }
-
-          // Trigger confirmation dialog before applying change!
-          const confirmMsg = `確定要將「${card.title}」的時間調整為：\n🕒 ${newStartTime} - ${newEndTime} 嗎？`;
-          if (confirm(confirmMsg)) {
-            card.startTime = newStartTime;
-            card.endTime = newEndTime;
-            this.saveData();
-            this.renderSchedule();
-            this.renderCardsList();
-            this.showToast(`已移動「${card.title}」至 ${newStartTime}`);
+          const ns = Math.round(parseFloat(element.style.top) / SLOT_HEIGHT);
+          const newStart = this.slotToTime(ns);
+          const newEnd = this.slotToTime(ns + durSlots);
+          if (newStart === card.startTime) { element.style.top = `${initTop}px`; return; }
+          if (confirm(`確定要將「${card.title}」調整為：\n🕒 ${newStart} - ${newEnd} 嗎？`)) {
+            card.startTime = newStart; card.endTime = newEnd;
+            this.saveData(); this.renderSchedule(); this.renderCardsList();
+            this.showToast(`已移動「${card.title}」至 ${newStart}`);
           } else {
-            // Cancelled: revert card position back to original slot
-            element.style.top = `${initialTop}px`;
+            element.style.top = `${initTop}px`;
           }
         }
       };
 
-      window.addEventListener('mousemove', onPointerMove);
-      window.addEventListener('mouseup', onPointerUp);
-      window.addEventListener('touchmove', onPointerMove, { passive: false });
-      window.addEventListener('touchend', onPointerUp);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
     };
 
-    handle.addEventListener('mousedown', onPointerDown);
-    handle.addEventListener('touchstart', onPointerDown, { passive: false });
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, { passive: false });
   }
+
+  // ── Cards list view ──────────────────────────────────────────────────────
 
   renderCardsList() {
     const list = document.getElementById('cardsList');
     list.innerHTML = '';
-    const currentDay = this.getCurrentDay();
-
-    if (currentDay.cards.length === 0) {
-      list.innerHTML = `
-        <div style="text-align:center;padding:40px 20px;color:var(--text-dim);">
-          <i data-lucide="calendar" style="width:48px;height:48px;margin-bottom:12px;opacity:0.5;"></i>
-          <p>這一天目前還沒有安排行程</p>
-          <button class="btn btn-primary" style="margin-top:12px;" onclick="window.tripManager.openAddModal()">
-            <i data-lucide="plus"></i> 立即新增行程卡片
-          </button>
-        </div>
-      `;
-      this.initLucide();
-      return;
+    const cur = this.getCurrentDay();
+    if (cur.cards.length === 0) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-dim);"><p>這一天目前還沒有安排行程</p>
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="window.tripManager.openAddModal()"><i data-lucide="plus"></i> 新增行程</button></div>`;
+      this.initLucide(); return;
     }
-
-    currentDay.cards.forEach(card => {
-      const item = document.createElement('div');
-      item.className = 'list-item-card';
-      item.innerHTML = `
-        <div class="list-time-block" style="border-left: 4px solid ${card.color || '#38bdf8'}; padding-left: 8px;">
-          <div>${card.startTime}</div>
-          <small style="color:var(--text-dim);font-weight:normal;">${card.endTime}</small>
+    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    sorted.forEach(card => {
+      const el = document.createElement('div');
+      el.className = 'list-item-card';
+      const costStr = (card.cost && parseFloat(card.cost) > 0) ? `<span style="color:var(--accent-amber);font-size:0.72rem;font-weight:600;">💰 ${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</span>` : '';
+      el.innerHTML = `
+        <div class="list-time-block" style="border-left:4px solid ${card.color||'#38bdf8'};padding-left:8px;">
+          <div>${card.startTime}</div><small style="color:var(--text-dim);">${card.endTime}</small>
         </div>
         <div class="list-info-block">
           <h4 style="font-size:0.95rem;font-weight:700;">${card.title}</h4>
           <p style="font-size:0.8rem;color:var(--text-muted);">${card.location || '無地點備註'}</p>
           ${card.notes ? `<small style="color:var(--text-dim);display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 ${card.notes}</small>` : ''}
+          ${costStr}
         </div>
-        <i data-lucide="chevron-right" style="color:var(--text-dim);width:18px;height:18px;"></i>
-      `;
-      item.addEventListener('click', () => this.openDetailModal(card));
-      list.appendChild(item);
+        <i data-lucide="chevron-right" style="color:var(--text-dim);width:18px;height:18px;"></i>`;
+      el.addEventListener('click', () => this.openDetailModal(card));
+      list.appendChild(el);
     });
     this.initLucide();
   }
 
-  // ==========================================================================
-  // Target Node Route Map & Sequential Polyline Logic (Leaflet)
-  // ==========================================================================
+  // ── Route Map (Leaflet) ──────────────────────────────────────────────────
+
   resolveCoordinates(card, index) {
-    if (typeof card.lat === 'number' && typeof card.lng === 'number') {
-      return [card.lat, card.lng];
-    }
-    const targetStr = (card.location + ' ' + card.title + ' ' + (card.mapLink || '')).toLowerCase();
-    for (const [key, coords] of Object.entries(KNOWN_GEO_DICT)) {
-      if (targetStr.includes(key)) {
-        return coords;
-      }
-    }
-    // Default fallback coordinates around central Tokyo with slight offset per index
-    return [35.6812 + (index * 0.015), 139.7671 + (index * 0.012)];
+    if (typeof card.lat === 'number' && typeof card.lng === 'number') return [card.lat, card.lng];
+    const t = (card.location + ' ' + card.title + ' ' + (card.mapLink || '')).toLowerCase();
+    for (const [k, v] of Object.entries(KNOWN_GEO_DICT)) { if (t.includes(k)) return v; }
+    return [35.6812 + index * 0.015, 139.7671 + index * 0.012];
   }
 
   renderRouteMap() {
-    const currentDay = this.getCurrentDay();
-    const sortedCards = [...currentDay.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
-    const stepperList = document.getElementById('routeStepperList');
-    stepperList.innerHTML = '';
+    const cur = this.getCurrentDay();
+    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    const stepper = document.getElementById('routeStepperList');
+    stepper.innerHTML = '';
+    document.getElementById('routeTotalInfo').textContent = `共 ${sorted.length} 個景點節點串聯`;
 
-    document.getElementById('routeTotalInfo').textContent = `共 ${sortedCards.length} 個景點節點串聯`;
-
-    // Initialize Leaflet Map if not already initialized
     if (!this.leafletMap) {
-      this.leafletMap = L.map('routeLeafletMap', {
-        zoomControl: true,
-        attributionControl: false
-      }).setView([35.6895, 139.6917], 12);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      }).addTo(this.leafletMap);
-
+      this.leafletMap = L.map('routeLeafletMap', { zoomControl: true, attributionControl: false }).setView([35.6895, 139.6917], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(this.leafletMap);
       this.mapLayersGroup = L.layerGroup().addTo(this.leafletMap);
-    } else {
-      this.mapLayersGroup.clearLayers();
-    }
+    } else { this.mapLayersGroup.clearLayers(); }
 
-    if (sortedCards.length === 0) {
-      stepperList.innerHTML = `
-        <p style="color:var(--text-dim);text-align:center;padding:16px;">今日尚無景點資料，請先新增行程！</p>
-      `;
-      return;
-    }
+    if (sorted.length === 0) { stepper.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:16px;">今日尚無景點資料</p>'; return; }
 
-    const latLngPoints = [];
-    const googleWaypoints = [];
+    const pts = [], wps = [];
+    sorted.forEach((card, i) => {
+      const n = i + 1, co = this.resolveCoordinates(card, i);
+      pts.push(co); wps.push(encodeURIComponent(card.location || card.title));
+      const icon = L.divIcon({ className: 'custom-map-node', html: `<div class="node-pin-bubble" style="background:${card.color||'#38bdf8'}">${n}</div>`, iconSize: [32,32], iconAnchor: [16,16] });
+      const marker = L.marker(co, { icon }).addTo(this.mapLayersGroup);
+      const costLine = (card.cost && parseFloat(card.cost) > 0) ? `<div style="font-size:0.75rem;color:#f59e0b;margin-top:2px;">💰 ${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</div>` : '';
+      marker.bindPopup(`<div style="font-family:var(--font-family);min-width:130px;"><b style="font-size:0.95rem;">#${n} ${card.title}</b><div style="font-size:0.8rem;color:#475569;margin-top:2px;">🕒 ${card.startTime} - ${card.endTime}</div><div style="font-size:0.8rem;color:#0284c7;">📍 ${card.location || '無地點'}</div>${costLine}</div>`);
 
-    sortedCards.forEach((card, i) => {
-      const nodeNum = i + 1;
-      const coords = this.resolveCoordinates(card, i);
-      latLngPoints.push(coords);
-      googleWaypoints.push(encodeURIComponent(card.location || card.title));
-
-      // Custom HTML Marker with Step Number Badge
-      const customIcon = L.divIcon({
-        className: 'custom-map-node',
-        html: `<div class="node-pin-bubble" style="background-color:${card.color || '#38bdf8'}">${nodeNum}</div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-
-      const marker = L.marker(coords, { icon: customIcon }).addTo(this.mapLayersGroup);
-      
-      const popupHtml = `
-        <div style="font-family:var(--font-family);min-width:140px;">
-          <b style="font-size:0.95rem;color:#0f172a;">#${nodeNum} ${card.title}</b>
-          <div style="font-size:0.8rem;color:#475569;margin-top:2px;">🕒 ${card.startTime} - ${card.endTime}</div>
-          <div style="font-size:0.8rem;color:#0284c7;margin-top:2px;">📍 ${card.location || '無地點'}</div>
-        </div>
-      `;
-      marker.bindPopup(popupHtml);
-
-      // Render Step sequence item in the stepper list below map
-      const nextCard = sortedCards[i + 1];
-      const stepperItem = document.createElement('div');
-      stepperItem.className = 'stepper-node-item';
-      stepperItem.innerHTML = `
-        <div class="stepper-line"></div>
-        <div class="stepper-badge" style="background:${card.color || '#38bdf8'}">${nodeNum}</div>
-        <div class="stepper-info">
-          <div class="stepper-header">
-            <span class="stepper-name">${card.title}</span>
-            <span class="stepper-time">${card.startTime}</span>
-          </div>
-          <div style="font-size:0.78rem;color:var(--text-muted);">${card.location || '自訂目標'}</div>
-          ${nextCard && nextCard.transportNote ? `
-            <div class="stepper-transit-tag">
-              ${TRANSPORT_MAP[nextCard.transportType] || '🚗 交通'}：${nextCard.transportNote}
-            </div>
-          ` : ''}
-        </div>
-      `;
-      stepperItem.addEventListener('click', () => {
-        this.leafletMap.flyTo(coords, 14, { duration: 0.8 });
-        marker.openPopup();
-      });
-      stepperList.appendChild(stepperItem);
+      const next = sorted[i + 1];
+      const si = document.createElement('div');
+      si.className = 'stepper-node-item';
+      si.innerHTML = `<div class="stepper-line"></div><div class="stepper-badge" style="background:${card.color||'#38bdf8'}">${n}</div>
+        <div class="stepper-info"><div class="stepper-header"><span class="stepper-name">${card.title}</span><span class="stepper-time">${card.startTime}</span></div>
+        <div style="font-size:0.78rem;color:var(--text-muted);">${card.location||'自訂目標'}</div>
+        ${next && next.transportNote ? `<div class="stepper-transit-tag">${TRANSPORT_MAP[next.transportType]||'🚗 交通'}：${next.transportNote}</div>` : ''}</div>`;
+      si.addEventListener('click', () => { this.leafletMap.flyTo(co, 14, { duration: 0.8 }); marker.openPopup(); });
+      stepper.appendChild(si);
     });
 
-    // Draw Connected Polyline between consecutive nodes
-    if (latLngPoints.length > 1) {
-      const polyline = L.polyline(latLngPoints, {
-        color: '#38bdf8',
-        weight: 4,
-        opacity: 0.85,
-        dashArray: '8, 8',
-        lineCap: 'round'
-      }).addTo(this.mapLayersGroup);
+    if (pts.length > 1) {
+      const poly = L.polyline(pts, { color: '#38bdf8', weight: 4, opacity: 0.85, dashArray: '8,8', lineCap: 'round' }).addTo(this.mapLayersGroup);
+      this.leafletMap.fitBounds(poly.getBounds(), { padding: [40, 40] });
+    } else { this.leafletMap.setView(pts[0], 13); }
 
-      this.leafletMap.fitBounds(polyline.getBounds(), { padding: [40, 40] });
-    } else {
-      this.leafletMap.setView(latLngPoints[0], 13);
-    }
+    const btn = document.getElementById('btnOpenFullGoogleMapsRoute');
+    if (wps.length >= 2) {
+      let gUrl = `https://www.google.com/maps/dir/?api=1&origin=${wps[0]}&destination=${wps[wps.length-1]}`;
+      if (wps.length > 2) gUrl += `&waypoints=${wps.slice(1,-1).join('|')}`;
+      btn.href = gUrl; btn.classList.remove('hidden');
+    } else if (wps.length === 1) { btn.href = `https://maps.google.com/?q=${wps[0]}`; btn.classList.remove('hidden'); }
+    else { btn.classList.add('hidden'); }
 
-    // Google Maps multi-point route direction generation
-    const fullRouteBtn = document.getElementById('btnOpenFullGoogleMapsRoute');
-    if (googleWaypoints.length >= 2) {
-      const origin = googleWaypoints[0];
-      const destination = googleWaypoints[googleWaypoints.length - 1];
-      const waypointsStr = googleWaypoints.slice(1, -1).join('|');
-      let gUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-      if (waypointsStr) {
-        gUrl += `&waypoints=${waypointsStr}`;
-      }
-      fullRouteBtn.href = gUrl;
-      fullRouteBtn.classList.remove('hidden');
-    } else if (googleWaypoints.length === 1) {
-      fullRouteBtn.href = `https://maps.google.com/?q=${googleWaypoints[0]}`;
-      fullRouteBtn.classList.remove('hidden');
-    } else {
-      fullRouteBtn.classList.add('hidden');
-    }
-
-    // Leaflet map refresh size
-    setTimeout(() => {
-      this.leafletMap.invalidateSize();
-    }, 200);
-
+    setTimeout(() => this.leafletMap.invalidateSize(), 200);
     this.initLucide();
   }
 
-  // --- Modals & User Actions ---
+  // ── Event Listeners ──────────────────────────────────────────────────────
 
   setupEventListeners() {
-    // Theme toggle
+    // Theme
     document.getElementById('btnThemeToggle').addEventListener('click', () => this.toggleTheme());
 
-    // Add day button
-    document.getElementById('btnAddDay').addEventListener('click', () => {
-      const nextDayNum = this.data.days.length + 1;
-      const lastDate = new Date(this.data.days[this.data.days.length - 1].date);
-      lastDate.setDate(lastDate.getDate() + 1);
-      const nextDateStr = lastDate.toISOString().split('T')[0];
-
-      this.data.days.push({
-        dayNumber: nextDayNum,
-        date: nextDateStr,
-        label: `Day ${nextDayNum} 自訂行程`,
-        cards: []
-      });
-      this.data.currentDayIndex = this.data.days.length - 1;
+    // Save to cache
+    document.getElementById('btnSaveCache').addEventListener('click', () => {
       this.saveData();
-      this.renderAll();
-      this.showToast(`已新增 Day ${nextDayNum}`);
+      this.saveWishlist();
+      this.showToast('✅ 所有設定已儲存至本地快取 (LocalStorage)！');
+    });
+
+    // Add day
+    document.getElementById('btnAddDay').addEventListener('click', () => {
+      const n = this.data.days.length + 1;
+      const last = new Date(this.data.days[this.data.days.length - 1].date);
+      last.setDate(last.getDate() + 1);
+      const ds = last.toISOString().split('T')[0];
+      this.data.days.push({ dayNumber: n, date: ds, label: `Day ${n}`, cards: [] });
+      this.data.currentDayIndex = this.data.days.length - 1;
+      this.data.endDate = ds;
+      this.saveData(); this.renderAll();
+      this.showToast(`已新增 Day ${n}`);
     });
 
     // View switchers
-    const btnTimeline = document.getElementById('btnViewTimeline');
-    const btnCards = document.getElementById('btnViewCards');
-    const btnRoute = document.getElementById('btnViewRoute');
-    const viewTimeline = document.getElementById('timelineContainer');
-    const viewCards = document.getElementById('cardsListContainer');
-    const viewRoute = document.getElementById('routeMapContainer');
+    const bT = document.getElementById('btnViewTimeline');
+    const bC = document.getElementById('btnViewCards');
+    const bR = document.getElementById('btnViewRoute');
+    const vT = document.getElementById('timelineContainer');
+    const vC = document.getElementById('cardsListContainer');
+    const vR = document.getElementById('routeMapContainer');
 
-    btnTimeline.addEventListener('click', () => {
+    bT.addEventListener('click', () => {
       this.currentViewMode = 'timeline';
-      btnTimeline.classList.add('active');
-      btnCards.classList.remove('active');
-      btnRoute.classList.remove('active');
-      viewTimeline.classList.remove('hidden');
-      viewCards.classList.add('hidden');
-      viewRoute.classList.add('hidden');
+      bT.classList.add('active'); bC.classList.remove('active'); bR.classList.remove('active');
+      vT.classList.remove('hidden'); vC.classList.add('hidden'); vR.classList.add('hidden');
+      this.renderAll();
     });
-
-    btnCards.addEventListener('click', () => {
+    bC.addEventListener('click', () => {
       this.currentViewMode = 'cards';
-      btnCards.classList.add('active');
-      btnTimeline.classList.remove('active');
-      btnRoute.classList.remove('active');
-      viewCards.classList.remove('hidden');
-      viewTimeline.classList.add('hidden');
-      viewRoute.classList.add('hidden');
+      bC.classList.add('active'); bT.classList.remove('active'); bR.classList.remove('active');
+      vC.classList.remove('hidden'); vT.classList.add('hidden'); vR.classList.add('hidden');
     });
-
-    btnRoute.addEventListener('click', () => {
+    bR.addEventListener('click', () => {
       this.currentViewMode = 'route';
-      btnRoute.classList.add('active');
-      btnTimeline.classList.remove('active');
-      btnCards.classList.remove('active');
-      viewRoute.classList.remove('hidden');
-      viewTimeline.classList.add('hidden');
-      viewCards.classList.add('hidden');
+      bR.classList.add('active'); bT.classList.remove('active'); bC.classList.remove('active');
+      vR.classList.remove('hidden'); vT.classList.add('hidden'); vC.classList.add('hidden');
       this.renderRouteMap();
     });
 
-    // Editable Trip Title
-    const tripTitleDisplay = document.getElementById('tripTitleDisplay');
-    tripTitleDisplay.addEventListener('blur', () => {
-      const val = tripTitleDisplay.textContent.trim();
-      if (val) {
-        this.data.title = val;
-        this.saveData();
-      }
+    // Multi-day span
+    document.querySelectorAll('#spanRangePills .pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#spanRangePills .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentSpanDays = parseInt(btn.dataset.days, 10);
+        this.renderAll();
+      });
     });
 
-    // Populate Time Dropdown Options (30-min intervals)
+    // Trip title edit
+    document.getElementById('tripTitleDisplay').addEventListener('blur', () => {
+      const v = document.getElementById('tripTitleDisplay').textContent.trim();
+      if (v) { this.data.title = v; this.saveData(); }
+    });
+
+    // Form setup
     this.populateTimeDropdowns();
     this.renderColorPalette();
 
-    // Quick Add Buttons
+    // Quick add
     document.getElementById('btnQuickAdd').addEventListener('click', () => this.openAddModal());
     document.getElementById('btnFloatAdd').addEventListener('click', () => this.openAddModal());
 
-    // Card Modal Close & Submit
+    // Card modal
     document.getElementById('btnModalClose').addEventListener('click', () => this.closeCardModal());
     document.getElementById('btnCancelCard').addEventListener('click', () => this.closeCardModal());
     document.getElementById('cardForm').addEventListener('submit', (e) => this.handleSaveCard(e));
     document.getElementById('btnDeleteCard').addEventListener('click', () => this.handleDeleteCard());
 
-    // Detail Modal actions
+    // Detail modal
     document.getElementById('btnDetailClose').addEventListener('click', () => this.closeDetailModal());
     document.getElementById('btnDetailEdit').addEventListener('click', () => {
-      const cardId = document.getElementById('detailModal').dataset.activeCardId;
-      const currentDay = this.getCurrentDay();
-      const card = currentDay.cards.find(c => c.id === cardId);
-      this.closeDetailModal();
-      if (card) this.openEditModal(card);
+      const c = this.findCardById(document.getElementById('detailModal').dataset.activeCardId);
+      this.closeDetailModal(); if (c) this.openEditModal(c);
     });
     document.getElementById('btnDetailDelete').addEventListener('click', () => {
-      const cardId = document.getElementById('detailModal').dataset.activeCardId;
-      const currentDay = this.getCurrentDay();
-      currentDay.cards = currentDay.cards.filter(c => c.id !== cardId);
-      this.saveData();
-      this.closeDetailModal();
-      this.renderAll();
-      this.showToast('已刪除行程卡片');
+      const id = document.getElementById('detailModal').dataset.activeCardId;
+      this.deleteCardById(id); this.closeDetailModal(); this.renderAll();
+      this.showToast('已刪除行程卡片（可點擊復原按鈕撤銷）');
     });
 
-    // Copy card to another day
-    const btnCopyDay = document.getElementById('btnDetailCopyDay');
-    if (btnCopyDay) {
-      btnCopyDay.addEventListener('click', () => {
-        const cardId = document.getElementById('detailModal').dataset.activeCardId;
-        const currentDay = this.getCurrentDay();
-        const card = currentDay.cards.find(c => c.id === cardId);
-        if (card) this.handleCopyCardToDay(card);
-      });
-    }
+    // Copy / Move
+    document.getElementById('btnDetailCopyDay')?.addEventListener('click', () => {
+      const c = this.findCardById(document.getElementById('detailModal').dataset.activeCardId);
+      if (c) this.openDayPickerModal('copy', c);
+    });
+    document.getElementById('btnDetailMoveDay')?.addEventListener('click', () => {
+      const c = this.findCardById(document.getElementById('detailModal').dataset.activeCardId);
+      if (c) this.openDayPickerModal('move', c);
+    });
 
-    // Move card to another day
-    const btnMoveDay = document.getElementById('btnDetailMoveDay');
-    if (btnMoveDay) {
-      btnMoveDay.addEventListener('click', () => {
-        const cardId = document.getElementById('detailModal').dataset.activeCardId;
-        const currentDay = this.getCurrentDay();
-        const card = currentDay.cards.find(c => c.id === cardId);
-        if (card) this.handleMoveCardToDay(card);
-      });
-    }
-
-    // Transport buttons in form
+    // Transport buttons
     document.querySelectorAll('.transport-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.transport-btn').forEach(b => b.classList.remove('selected'));
@@ -831,117 +796,183 @@ class TripManager {
       });
     });
 
-    // Data Management Modal
+    // Data modal
     document.getElementById('btnDataMenu').addEventListener('click', () => this.openDataModal());
     document.getElementById('btnExportJson').addEventListener('click', () => this.exportJsonFile());
-    document.getElementById('btnImportJsonTrigger').addEventListener('click', () => {
-      document.getElementById('fileJsonInput').click();
-    });
-
+    document.getElementById('btnImportJsonTrigger').addEventListener('click', () => document.getElementById('fileJsonInput').click());
     document.getElementById('fileJsonInput').addEventListener('change', (e) => this.handleImportFile(e));
     document.getElementById('btnDataModalClose').addEventListener('click', () => this.closeDataModal());
     document.getElementById('btnActionDownload').addEventListener('click', () => this.exportJsonFile());
-    document.getElementById('btnActionUpload').addEventListener('click', () => {
-      document.getElementById('fileJsonInput').click();
-    });
+    document.getElementById('btnActionUpload').addEventListener('click', () => document.getElementById('fileJsonInput').click());
     document.getElementById('btnActionCopyCode').addEventListener('click', () => this.copyShareCode());
+    document.getElementById('btnActionPasteCode')?.addEventListener('click', () => this.pasteShareCode());
+
     document.getElementById('btnActionCreateNewTrip').addEventListener('click', () => {
-      if (confirm('確定要清空並建立全新的空白行程嗎？')) {
-        this.data = createDefaultEmptyTrip();
-        this.saveData();
-        this.closeDataModal();
-        this.renderAll();
+      if (confirm('確定要清空並建立全新的空白行程嗎？\n（建議先備份目前行程 JSON 檔案）')) {
+        this.data = createDefaultEmptyTrip(); this.saveData(); this.closeDataModal(); this.renderAll();
         this.showToast('已建立全新空白行程！');
       }
     });
 
-    // Wishlist Modal Events
-    const btnWishlist = document.getElementById('btnWishlistMenu');
-    if (btnWishlist) btnWishlist.addEventListener('click', () => this.openWishlistModal());
-    const btnFloatWishlist = document.getElementById('btnFloatWishlist');
-    if (btnFloatWishlist) btnFloatWishlist.addEventListener('click', () => this.openWishlistModal());
+    // Date range picker
+    document.getElementById('btnApplyDateRange')?.addEventListener('click', () => this.applyDateRange());
+
+    // Currency selector
+    document.getElementById('currencySelect')?.addEventListener('change', () => {
+      this.data.currency = document.getElementById('currencySelect').value;
+      this.saveData(); this.renderAll(); this.updateBudgetSummary();
+      this.showToast(`貨幣已切換為 ${this.data.currency}`);
+    });
+
+    // Wishlist
+    document.getElementById('btnWishlistMenu')?.addEventListener('click', () => this.openWishlistModal());
+    document.getElementById('btnFloatWishlist')?.addEventListener('click', () => this.openWishlistModal());
     document.getElementById('btnWishlistModalClose').addEventListener('click', () => this.closeWishlistModal());
 
-    // Wishlist tabs switch
-    const tabItems = document.getElementById('tabWishlistItems');
-    const tabImport = document.getElementById('tabWishlistImport');
-    const panelItems = document.getElementById('panelWishlistItems');
-    const panelImport = document.getElementById('panelWishlistImport');
+    const tabI = document.getElementById('tabWishlistItems');
+    const tabIm = document.getElementById('tabWishlistImport');
+    const panI = document.getElementById('panelWishlistItems');
+    const panIm = document.getElementById('panelWishlistImport');
+    tabI.addEventListener('click', () => { tabI.classList.add('active'); tabIm.classList.remove('active'); panI.classList.remove('hidden'); panIm.classList.add('hidden'); });
+    tabIm.addEventListener('click', () => { tabIm.classList.add('active'); tabI.classList.remove('active'); panIm.classList.remove('hidden'); panI.classList.add('hidden'); });
 
-    tabItems.addEventListener('click', () => {
-      tabItems.classList.add('active');
-      tabImport.classList.remove('active');
-      panelItems.classList.remove('hidden');
-      panelImport.classList.add('hidden');
-    });
-
-    tabImport.addEventListener('click', () => {
-      tabImport.classList.add('active');
-      tabItems.classList.remove('active');
-      panelImport.classList.remove('hidden');
-      panelItems.classList.add('hidden');
-    });
-
-    // Add single item
     document.getElementById('btnAddSingleWishlist').addEventListener('click', () => this.handleAddSingleWishlist());
-
-    // Batch import from Google Maps / text list
     document.getElementById('btnRunBatchImport').addEventListener('click', () => this.handleBatchGoogleMapsImport());
+    document.getElementById('btnPickFromWishlist')?.addEventListener('click', () => this.openWishlistModal(true));
 
-    // Quick pick from wishlist in Card Modal
-    const btnPick = document.getElementById('btnPickFromWishlist');
-    if (btnPick) {
-      btnPick.addEventListener('click', () => {
-        this.openWishlistModal(true); // mode: select
+    // Undo
+    document.getElementById('btnUndo')?.addEventListener('click', () => this.undoLastDelete());
+
+    // Day picker modal close
+    document.getElementById('btnDayPickerClose')?.addEventListener('click', () => this.closeDayPickerModal());
+
+    // Close modals on backdrop
+    document.querySelectorAll('.modal-backdrop').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) { modal.classList.add('hidden'); const mf = document.getElementById('mapFrame'); if (mf) mf.src = ''; }
       });
-    }
+    });
   }
 
-  populateTimeDropdowns() {
-    const startSelect = document.getElementById('cardStartTime');
-    const endSelect = document.getElementById('cardEndTime');
-    startSelect.innerHTML = '';
-    endSelect.innerHTML = '';
+  // ── Date Range Picker ────────────────────────────────────────────────────
 
-    for (let slot = 0; slot <= 36; slot++) {
-      const totalMinutes = (6 * 60) + (slot * 30);
-      const h = Math.floor(totalMinutes / 60);
-      const m = totalMinutes % 60;
-      const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      
-      const opt1 = new Option(timeStr, timeStr);
-      const opt2 = new Option(timeStr, timeStr);
-      startSelect.appendChild(opt1);
-      endSelect.appendChild(opt2);
+  applyDateRange() {
+    const sd = document.getElementById('tripStartDate').value;
+    const ed = document.getElementById('tripEndDate').value;
+    if (!sd || !ed) { alert('請選擇開始與結束日期！'); return; }
+    if (new Date(ed) < new Date(sd)) { alert('結束日期不能早於開始日期！'); return; }
+
+    const diff = dateDiffDays(sd, ed) + 1;
+    if (diff > 30) { alert('行程最多支援 30 天！'); return; }
+
+    // Preserve existing cards by date mapping
+    const existingByDate = {};
+    this.data.days.forEach(d => { existingByDate[d.date] = d.cards; });
+
+    const newDays = [];
+    for (let i = 0; i < diff; i++) {
+      const dt = new Date(sd);
+      dt.setDate(dt.getDate() + i);
+      const ds = dt.toISOString().split('T')[0];
+      newDays.push({
+        dayNumber: i + 1,
+        date: ds,
+        label: `Day ${i + 1}`,
+        cards: existingByDate[ds] || []
+      });
+    }
+
+    this.data.days = newDays;
+    this.data.startDate = sd;
+    this.data.endDate = ed;
+    this.data.currentDayIndex = 0;
+    this.saveData();
+    this.closeDataModal();
+    this.renderAll();
+    this.showToast(`已套用日期區間：${sd} ~ ${ed} (${diff} 天)`);
+  }
+
+  // ── Time Dropdowns (10-min) ──────────────────────────────────────────────
+
+  populateTimeDropdowns() {
+    const ss = document.getElementById('cardStartTime');
+    const se = document.getElementById('cardEndTime');
+    ss.innerHTML = ''; se.innerHTML = '';
+    // 00:00 to 24:00, every 10 min → 145 options
+    for (let slot = 0; slot <= TOTAL_SLOTS; slot++) {
+      const tm = slot * SLOT_MINUTES;
+      const h = Math.floor(tm / 60), m = tm % 60;
+      const ts = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      ss.appendChild(new Option(ts, ts));
+      se.appendChild(new Option(ts, ts));
     }
   }
 
   renderColorPalette() {
-    const container = document.getElementById('colorPalette');
-    container.innerHTML = '';
+    const c = document.getElementById('colorPalette');
+    c.innerHTML = '';
     COLOR_PRESETS.forEach(color => {
-      const swatch = document.createElement('div');
-      swatch.className = `color-swatch ${color === this.selectedColor ? 'selected' : ''}`;
-      swatch.style.backgroundColor = color;
-      swatch.addEventListener('click', () => {
-        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-        swatch.classList.add('selected');
+      const sw = document.createElement('div');
+      sw.className = `color-swatch ${color === this.selectedColor ? 'selected' : ''}`;
+      sw.style.backgroundColor = color;
+      sw.addEventListener('click', () => {
+        c.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+        sw.classList.add('selected');
         this.selectedColor = color;
         document.getElementById('cardColor').value = color;
       });
-      container.appendChild(swatch);
+      c.appendChild(sw);
     });
   }
 
-  populateDayDropdown(selectedDayIndex) {
-    const daySelect = document.getElementById('cardTargetDay');
-    if (!daySelect) return;
-    daySelect.innerHTML = '';
-    this.data.days.forEach((day, index) => {
-      const opt = new Option(`Day ${day.dayNumber} (${day.date.slice(5)})`, index);
-      if (index === selectedDayIndex) opt.selected = true;
-      daySelect.appendChild(opt);
+  populateDayDropdown(sel) {
+    const dd = document.getElementById('cardTargetDay');
+    if (!dd) return;
+    dd.innerHTML = '';
+    this.data.days.forEach((day, i) => {
+      const opt = new Option(`Day ${day.dayNumber} (${formatDateStr(day.date)})`, i);
+      if (i === sel) opt.selected = true;
+      dd.appendChild(opt);
     });
+  }
+
+  // ── Card CRUD ────────────────────────────────────────────────────────────
+
+  findCardById(id) {
+    for (const d of this.data.days) { const c = d.cards.find(x => x.id === id); if (c) return c; }
+    return null;
+  }
+
+  findCardDayIndex(id) {
+    for (let i = 0; i < this.data.days.length; i++) { if (this.data.days[i].cards.find(x => x.id === id)) return i; }
+    return -1;
+  }
+
+  deleteCardById(id) {
+    for (const d of this.data.days) {
+      const idx = d.cards.findIndex(x => x.id === id);
+      if (idx !== -1) {
+        const del = d.cards.splice(idx, 1)[0];
+        this.undoStack.push({ card: JSON.parse(JSON.stringify(del)), dayIndex: this.data.days.indexOf(d) });
+        this.saveData(); return del;
+      }
+    }
+    return null;
+  }
+
+  undoLastDelete() {
+    if (this.undoStack.length === 0) { this.showToast('沒有可以復原的操作'); return; }
+    const last = this.undoStack.pop();
+    if (last.dayIndex >= 0 && last.dayIndex < this.data.days.length) {
+      this.data.days[last.dayIndex].cards.push(last.card);
+      this.saveData(); this.data.currentDayIndex = last.dayIndex;
+      this.renderAll(); this.showToast(`已復原「${last.card.title}」！`);
+    }
+  }
+
+  updateUndoButton() {
+    const b = document.getElementById('btnUndo');
+    if (b) b.classList.toggle('hidden', this.undoStack.length === 0);
   }
 
   openAddModal() {
@@ -956,12 +987,11 @@ class TripManager {
     document.getElementById('cardUrl').value = '';
     document.getElementById('cardTransportNote').value = '';
     document.getElementById('cardNotes').value = '';
+    document.getElementById('cardCost').value = '';
     document.getElementById('btnDeleteCard').classList.add('hidden');
-
     this.selectedColor = COLOR_PRESETS[0];
     this.renderColorPalette();
     this.selectTransportType('subway');
-
     document.getElementById('cardModal').classList.remove('hidden');
   }
 
@@ -969,7 +999,7 @@ class TripManager {
     document.getElementById('modalTitle').textContent = '編輯行程卡片';
     document.getElementById('editCardId').value = card.id;
     document.getElementById('cardTitle').value = card.title || '';
-    this.populateDayDropdown(this.data.currentDayIndex);
+    this.populateDayDropdown(Math.max(0, this.findCardDayIndex(card.id)));
     document.getElementById('cardStartTime').value = card.startTime || '10:00';
     document.getElementById('cardEndTime').value = card.endTime || '11:30';
     document.getElementById('cardLocation').value = card.location || '';
@@ -977,269 +1007,218 @@ class TripManager {
     document.getElementById('cardUrl').value = card.url || '';
     document.getElementById('cardTransportNote').value = card.transportNote || '';
     document.getElementById('cardNotes').value = card.notes || '';
+    document.getElementById('cardCost').value = card.cost || '';
     document.getElementById('btnDeleteCard').classList.remove('hidden');
-
     this.selectedColor = card.color || COLOR_PRESETS[0];
     this.renderColorPalette();
     this.selectTransportType(card.transportType || 'subway');
-
     document.getElementById('cardModal').classList.remove('hidden');
   }
 
-  closeCardModal() {
-    document.getElementById('cardModal').classList.add('hidden');
-  }
+  closeCardModal() { document.getElementById('cardModal').classList.add('hidden'); }
 
   selectTransportType(type) {
     this.selectedTransportType = type;
-    document.querySelectorAll('.transport-btn').forEach(b => {
-      b.classList.toggle('selected', b.dataset.type === type);
-    });
+    document.querySelectorAll('.transport-btn').forEach(b => b.classList.toggle('selected', b.dataset.type === type));
   }
 
   handleSaveCard(e) {
     e.preventDefault();
     const id = document.getElementById('editCardId').value;
     const title = document.getElementById('cardTitle').value.trim();
-    const targetDayIndex = parseInt(document.getElementById('cardTargetDay').value, 10);
-    const startTime = document.getElementById('cardStartTime').value;
-    const endTime = document.getElementById('cardEndTime').value;
-    const location = document.getElementById('cardLocation').value.trim();
-    let mapLink = document.getElementById('cardMapLink').value.trim();
+    const tdi = parseInt(document.getElementById('cardTargetDay').value, 10);
+    const st = document.getElementById('cardStartTime').value;
+    const et = document.getElementById('cardEndTime').value;
+    const loc = document.getElementById('cardLocation').value.trim();
+    let ml = document.getElementById('cardMapLink').value.trim();
     const url = document.getElementById('cardUrl').value.trim();
-    const transportNote = document.getElementById('cardTransportNote').value.trim();
+    const tn = document.getElementById('cardTransportNote').value.trim();
     const notes = document.getElementById('cardNotes').value.trim();
+    const cost = document.getElementById('cardCost').value.trim();
     const color = this.selectedColor;
 
-    if (!mapLink && location) {
-      mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`;
-    }
+    if (!ml && loc) ml = `https://maps.google.com/?q=${encodeURIComponent(loc)}`;
 
-    const currentDay = this.getCurrentDay();
-    const targetDay = this.data.days[targetDayIndex] || currentDay;
+    const targetDay = this.data.days[tdi] || this.getCurrentDay();
 
     if (id) {
-      // Find card across all days (in case day was changed in dropdown)
-      let foundCard = null;
-      let originalDayIndex = -1;
-      this.data.days.forEach((d, dIdx) => {
-        const c = d.cards.find(item => item.id === id);
-        if (c) {
-          foundCard = c;
-          originalDayIndex = dIdx;
-        }
-      });
-
-      if (foundCard) {
-        Object.assign(foundCard, {
-          title, startTime, endTime, color, location, mapLink, url,
-          transportType: this.selectedTransportType, transportNote, notes
-        });
-
-        // If user changed the day in dropdown, move to target day
-        if (originalDayIndex !== targetDayIndex) {
-          this.data.days[originalDayIndex].cards = this.data.days[originalDayIndex].cards.filter(c => c.id !== id);
-          targetDay.cards.push(foundCard);
-          this.data.currentDayIndex = targetDayIndex;
+      let found = null, origIdx = -1;
+      this.data.days.forEach((d, di) => { const c = d.cards.find(x => x.id === id); if (c) { found = c; origIdx = di; } });
+      if (found) {
+        Object.assign(found, { title, startTime: st, endTime: et, color, location: loc, mapLink: ml, url, transportType: this.selectedTransportType, transportNote: tn, notes, cost });
+        if (origIdx !== tdi) {
+          this.data.days[origIdx].cards = this.data.days[origIdx].cards.filter(c => c.id !== id);
+          targetDay.cards.push(found);
+          this.data.currentDayIndex = tdi;
         }
       }
     } else {
-      const newCard = {
-        id: `card_${Date.now()}`,
-        title, startTime, endTime, color, location, mapLink, url,
-        transportType: this.selectedTransportType, transportNote, notes
-      };
-      targetDay.cards.push(newCard);
-      this.data.currentDayIndex = targetDayIndex;
+      targetDay.cards.push({
+        id: `card_${Date.now()}`, title, startTime: st, endTime: et, color, location: loc, mapLink: ml, url,
+        transportType: this.selectedTransportType, transportNote: tn, notes, cost
+      });
+      this.data.currentDayIndex = tdi;
     }
-
-    this.saveData();
-    this.closeCardModal();
-    this.renderAll();
+    this.saveData(); this.closeCardModal(); this.renderAll();
     this.showToast('行程已成功儲存！');
-  }
-
-  handleCopyCardToDay(card) {
-    const daysList = this.data.days.map((d, i) => `${i + 1}: Day ${d.dayNumber} (${d.date})`).join('\n');
-    const input = prompt(`請輸入要【複製】到的天數編號 (1 ~ ${this.data.days.length})：\n${daysList}`, String(this.data.currentDayIndex + 1));
-    if (!input) return;
-
-    const targetDayIndex = parseInt(input.trim(), 10) - 1;
-    if (isNaN(targetDayIndex) || targetDayIndex < 0 || targetDayIndex >= this.data.days.length) {
-      alert('請輸入有效的天數編號！');
-      return;
-    }
-
-    const copiedCard = JSON.parse(JSON.stringify(card));
-    copiedCard.id = `card_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-    this.data.days[targetDayIndex].cards.push(copiedCard);
-    this.saveData();
-    this.closeDetailModal();
-    this.data.currentDayIndex = targetDayIndex;
-    this.renderAll();
-    this.showToast(`已複製「${card.title}」至 Day ${targetDayIndex + 1}！`);
-  }
-
-  handleMoveCardToDay(card) {
-    const daysList = this.data.days.map((d, i) => `${i + 1}: Day ${d.dayNumber} (${d.date})`).join('\n');
-    const input = prompt(`請輸入要【搬移】到的天數編號 (1 ~ ${this.data.days.length})：\n${daysList}`, String(this.data.currentDayIndex + 1));
-    if (!input) return;
-
-    const targetDayIndex = parseInt(input.trim(), 10) - 1;
-    if (isNaN(targetDayIndex) || targetDayIndex < 0 || targetDayIndex >= this.data.days.length) {
-      alert('請輸入有效的天數編號！');
-      return;
-    }
-
-    if (targetDayIndex === this.data.currentDayIndex) {
-      alert('此行程已在當天！');
-      return;
-    }
-
-    // Remove from current day
-    const currentDay = this.getCurrentDay();
-    currentDay.cards = currentDay.cards.filter(c => c.id !== card.id);
-
-    // Append to target day
-    this.data.days[targetDayIndex].cards.push(card);
-    this.saveData();
-    this.closeDetailModal();
-    this.data.currentDayIndex = targetDayIndex;
-    this.renderAll();
-    this.showToast(`已將「${card.title}」搬移至 Day ${targetDayIndex + 1}！`);
   }
 
   handleDeleteCard() {
     const id = document.getElementById('editCardId').value;
     if (!id) return;
     if (confirm('確定要刪除這筆行程嗎？')) {
-      const currentDay = this.getCurrentDay();
-      currentDay.cards = currentDay.cards.filter(c => c.id !== id);
-      this.saveData();
-      this.closeCardModal();
-      this.renderAll();
-      this.showToast('已刪除行程卡片');
+      this.deleteCardById(id); this.closeCardModal(); this.renderAll();
+      this.showToast('已刪除行程卡片（可點擊復原按鈕撤銷）');
     }
   }
 
-  openDetailModal(card) {
-    const modal = document.getElementById('detailModal');
-    modal.dataset.activeCardId = card.id;
+  // ── Day Picker Modal ─────────────────────────────────────────────────────
 
-    document.getElementById('detailTitle').textContent = card.title;
-    document.getElementById('detailTimeBadge').textContent = `${card.startTime} - ${card.endTime}`;
-    
-    const transportBox = document.getElementById('detailTransportBox');
-    if (card.transportNote || card.transportType) {
-      transportBox.classList.remove('hidden');
-      document.getElementById('detailTransportTag').textContent = TRANSPORT_MAP[card.transportType] || '🚇 交通方式';
-      document.getElementById('detailTransportDesc').textContent = card.transportNote || '未填寫詳細說明';
-    } else {
-      transportBox.classList.add('hidden');
-    }
-
-    const locItem = document.getElementById('detailLocationItem');
-    const locText = document.getElementById('detailLocationText');
-    const mapOpenBtn = document.getElementById('detailMapOpenBtn');
-
-    if (card.location || card.mapLink) {
-      locItem.classList.remove('hidden');
-      locText.textContent = card.location || '查看 Google 地圖位置';
-      mapOpenBtn.href = card.mapLink || `https://maps.google.com/?q=${encodeURIComponent(card.location)}`;
-      mapOpenBtn.classList.remove('hidden');
-    } else {
-      locText.textContent = '未填寫具體地點';
-      mapOpenBtn.classList.add('hidden');
-    }
-
-    const linkItem = document.getElementById('detailLinkItem');
-    const externalLink = document.getElementById('detailExternalLink');
-    if (card.url) {
-      linkItem.classList.remove('hidden');
-      externalLink.href = card.url;
-      externalLink.textContent = card.url;
-    } else {
-      linkItem.classList.add('hidden');
-    }
-
-    const mapFrame = document.getElementById('mapFrame');
-    const mapFallback = document.getElementById('mapFallback');
-    const query = card.location || (card.mapLink ? this.extractMapQuery(card.mapLink) : card.title);
-
-    if (query) {
-      mapFrame.classList.remove('hidden');
-      mapFallback.classList.add('hidden');
-      const embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
-      mapFrame.src = embedUrl;
-    } else {
-      mapFrame.classList.add('hidden');
-      mapFallback.classList.remove('hidden');
-    }
-
-    const notesText = document.getElementById('detailNotesText');
-    notesText.textContent = card.notes || '尚無特別備註。點擊下方「編輯此卡片」隨時補充！';
-
+  openDayPickerModal(action, card) {
+    const modal = document.getElementById('dayPickerModal');
+    if (!modal) return;
+    modal.dataset.action = action;
+    modal.dataset.cardId = card.id;
+    document.getElementById('dayPickerTitle').textContent = action === 'copy' ? `複製「${card.title}」到：` : `搬移「${card.title}」到：`;
+    const list = document.getElementById('dayPickerList');
+    list.innerHTML = '';
+    const curIdx = this.findCardDayIndex(card.id);
+    this.data.days.forEach((day, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'day-picker-item';
+      if (i === curIdx && action === 'move') { btn.classList.add('disabled'); btn.disabled = true; }
+      btn.innerHTML = `<span class="day-picker-badge" style="background:var(--accent-gradient)">Day ${day.dayNumber}</span>
+        <span class="day-picker-date">${formatDateStr(day.date)}</span>
+        <span class="day-picker-count">${day.cards.length} 項</span>`;
+      btn.addEventListener('click', () => {
+        if (action === 'copy') this.executeCopyCard(card, i);
+        else this.executeMoveCard(card, curIdx, i);
+        this.closeDayPickerModal(); this.closeDetailModal();
+      });
+      list.appendChild(btn);
+    });
     modal.classList.remove('hidden');
     this.initLucide();
   }
 
-  extractMapQuery(url) {
-    try {
-      const parsed = new URL(url);
-      return parsed.searchParams.get('q') || parsed.pathname;
-    } catch {
-      return '';
-    }
+  closeDayPickerModal() { document.getElementById('dayPickerModal')?.classList.add('hidden'); }
+
+  executeCopyCard(card, tdi) {
+    const cp = JSON.parse(JSON.stringify(card));
+    cp.id = `card_${Date.now()}_${Math.random().toString(36).substr(2,4)}`;
+    this.data.days[tdi].cards.push(cp);
+    this.saveData(); this.data.currentDayIndex = tdi; this.renderAll();
+    this.showToast(`已複製「${card.title}」至 Day ${tdi + 1}！`);
   }
 
-  closeDetailModal() {
+  executeMoveCard(card, from, to) {
+    if (from === to) { this.showToast('此行程已在當天！'); return; }
+    this.data.days[from].cards = this.data.days[from].cards.filter(c => c.id !== card.id);
+    this.data.days[to].cards.push(card);
+    this.saveData(); this.data.currentDayIndex = to; this.renderAll();
+    this.showToast(`已將「${card.title}」搬移至 Day ${to + 1}！`);
+  }
+
+  // ── Detail Modal ─────────────────────────────────────────────────────────
+
+  openDetailModal(card) {
     const modal = document.getElementById('detailModal');
-    modal.classList.add('hidden');
-    document.getElementById('mapFrame').src = '';
-  }
+    modal.dataset.activeCardId = card.id;
+    document.getElementById('detailTitle').textContent = card.title;
+    document.getElementById('detailTimeBadge').textContent = `${card.startTime} - ${card.endTime}`;
 
-  openDataModal() {
-    document.getElementById('dataModal').classList.remove('hidden');
+    const cb = document.getElementById('detailCostBadge');
+    if (cb) {
+      if (card.cost && parseFloat(card.cost) > 0) { cb.textContent = `💰 ${this.data.currency} ${parseFloat(card.cost).toLocaleString()}`; cb.classList.remove('hidden'); }
+      else cb.classList.add('hidden');
+    }
+
+    const tb = document.getElementById('detailTransportBox');
+    if (card.transportNote || card.transportType) {
+      tb.classList.remove('hidden');
+      document.getElementById('detailTransportTag').textContent = TRANSPORT_MAP[card.transportType] || '🚇 交通方式';
+      document.getElementById('detailTransportDesc').textContent = card.transportNote || '未填寫';
+    } else tb.classList.add('hidden');
+
+    const li = document.getElementById('detailLocationItem');
+    const lt = document.getElementById('detailLocationText');
+    const mb = document.getElementById('detailMapOpenBtn');
+    if (card.location || card.mapLink) {
+      li.classList.remove('hidden');
+      lt.textContent = card.location || '查看 Google 地圖位置';
+      mb.href = card.mapLink || `https://maps.google.com/?q=${encodeURIComponent(card.location)}`;
+      mb.classList.remove('hidden');
+    } else { lt.textContent = '未填寫具體地點'; mb.classList.add('hidden'); }
+
+    const lk = document.getElementById('detailLinkItem');
+    const el = document.getElementById('detailExternalLink');
+    if (card.url) { lk.classList.remove('hidden'); el.href = card.url; el.textContent = card.url; }
+    else lk.classList.add('hidden');
+
+    const mf = document.getElementById('mapFrame');
+    const mfb = document.getElementById('mapFallback');
+    const q = card.location || (card.mapLink ? this.extractMapQuery(card.mapLink) : card.title);
+    if (q) { mf.classList.remove('hidden'); mfb.classList.add('hidden'); mf.src = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&t=&z=15&ie=UTF8&iwloc=&output=embed`; }
+    else { mf.classList.add('hidden'); mfb.classList.remove('hidden'); }
+
+    document.getElementById('detailNotesText').textContent = card.notes || '尚無特別備註。點擊下方「編輯」隨時補充！';
+    modal.classList.remove('hidden');
     this.initLucide();
   }
 
-  closeDataModal() {
-    document.getElementById('dataModal').classList.add('hidden');
+  extractMapQuery(url) { try { return new URL(url).searchParams.get('q') || ''; } catch { return ''; } }
+
+  closeDetailModal() {
+    document.getElementById('detailModal').classList.add('hidden');
+    document.getElementById('mapFrame').src = '';
   }
 
+  // ── Data Modal ───────────────────────────────────────────────────────────
+
+  openDataModal() {
+    document.getElementById('dataModal').classList.remove('hidden');
+    const cs = document.getElementById('currencySelect');
+    if (cs) cs.value = this.data.currency || 'JPY';
+    const sd = document.getElementById('tripStartDate');
+    const ed = document.getElementById('tripEndDate');
+    if (sd) sd.value = this.data.startDate || '';
+    if (ed) ed.value = this.data.endDate || '';
+    this.updateBudgetSummary();
+    this.initLucide();
+  }
+
+  updateBudgetSummary() {
+    const el = document.getElementById('totalBudgetDisplay');
+    if (!el) return;
+    let total = 0;
+    this.data.days.forEach(d => d.cards.forEach(c => { total += parseFloat(c.cost) || 0; }));
+    el.textContent = `總預算：${this.data.currency} ${total.toLocaleString()}`;
+  }
+
+  closeDataModal() { document.getElementById('dataModal').classList.add('hidden'); }
+
   exportJsonFile() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.data, null, 2));
-    const downloadAnchor = document.createElement('a');
-    const fileName = `${this.data.title.replace(/\s+/g, '_')}_travelgogo.json`;
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", fileName);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    const a = document.createElement('a');
+    a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this.data, null, 2));
+    a.download = `${this.data.title.replace(/\s+/g, '_')}_travelgogo.json`;
+    document.body.appendChild(a); a.click(); a.remove();
     this.showToast('已匯出行程 JSON 檔案！');
   }
 
   handleImportFile(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const importedData = JSON.parse(e.target.result);
-        if (importedData && importedData.days && Array.isArray(importedData.days)) {
-          this.data = importedData;
-          this.data.currentDayIndex = 0;
-          this.saveData();
-          this.renderAll();
-          this.closeDataModal();
+        const d = JSON.parse(e.target.result);
+        if (d?.days && Array.isArray(d.days)) {
+          this.data = d; this.data.currentDayIndex = 0;
+          if (!this.data.currency) this.data.currency = 'JPY';
+          this.saveData(); this.renderAll(); this.closeDataModal();
           this.showToast('成功匯入行程！');
-        } else {
-          alert('匯入的 JSON 格式不符合 TravelGoGo 行程規範。');
-        }
-      } catch (err) {
-        alert('解析 JSON 檔案失敗，請確認檔案格式是否正確。');
-      }
+        } else alert('JSON 格式不符合規範。');
+      } catch { alert('解析 JSON 失敗。'); }
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -1248,214 +1227,166 @@ class TripManager {
   copyShareCode() {
     try {
       const code = btoa(unescape(encodeURIComponent(JSON.stringify(this.data))));
-      navigator.clipboard.writeText(code).then(() => {
-        this.showToast('行程代碼已複製至剪貼簿！');
-      }).catch(() => {
-        prompt('請手動複製下方行程代碼：', code);
-      });
-    } catch (e) {
-      alert('壓縮代碼失敗：' + e.message);
-    }
+      navigator.clipboard.writeText(code).then(() => this.showToast('行程代碼已複製！')).catch(() => prompt('請手動複製：', code));
+    } catch(e) { alert('壓縮失敗：' + e.message); }
   }
 
-  showToast(message) {
-    const toast = document.getElementById('toastNotification');
-    toast.textContent = message;
-    toast.classList.remove('hidden');
-    clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => {
-      toast.classList.add('hidden');
-    }, 2800);
+  pasteShareCode() {
+    const code = prompt('請貼上旅伴分享的行程代碼：');
+    if (!code) return;
+    try {
+      const d = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+      if (d?.days && Array.isArray(d.days)) {
+        this.data = d; this.data.currentDayIndex = 0;
+        if (!this.data.currency) this.data.currency = 'JPY';
+        this.saveData(); this.closeDataModal(); this.renderAll();
+        this.showToast('成功從代碼匯入行程！');
+      } else alert('代碼格式不正確。');
+    } catch { alert('解析代碼失敗。'); }
   }
 
-  // ==========================================================================
-  // Wishlist & Google Maps Batch Import Features
-  // ==========================================================================
+  showToast(msg) {
+    const t = document.getElementById('toastNotification');
+    t.textContent = msg; t.classList.remove('hidden');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(() => t.classList.add('hidden'), 2800);
+  }
+
+  // ── Wishlist ─────────────────────────────────────────────────────────────
+
   openWishlistModal(selectMode = false) {
     this.wishlistSelectMode = selectMode;
-    const modal = document.getElementById('wishlistModal');
-    modal.classList.remove('hidden');
-    
-    // Switch to first tab by default
+    document.getElementById('wishlistModal').classList.remove('hidden');
     document.getElementById('tabWishlistItems').click();
     this.renderWishlist();
     this.initLucide();
   }
 
-  closeWishlistModal() {
-    document.getElementById('wishlistModal').classList.add('hidden');
-    this.wishlistSelectMode = false;
-  }
+  closeWishlistModal() { document.getElementById('wishlistModal').classList.add('hidden'); this.wishlistSelectMode = false; }
 
   renderWishlist() {
-    const container = document.getElementById('wishlistItemsContainer');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const countEl = document.getElementById('wishlistCount');
-    if (countEl) countEl.textContent = this.wishlist.length;
-
+    const c = document.getElementById('wishlistItemsContainer');
+    if (!c) return;
+    c.innerHTML = '';
+    const ce = document.getElementById('wishlistCount');
+    if (ce) ce.textContent = this.wishlist.length;
     const dot = document.getElementById('wishlistBadgeDot');
-    if (dot) {
-      dot.classList.toggle('hidden', this.wishlist.length === 0);
-    }
+    if (dot) dot.classList.toggle('hidden', this.wishlist.length === 0);
 
     if (this.wishlist.length === 0) {
-      container.innerHTML = `
-        <div style="text-align:center;padding:32px 16px;color:var(--text-dim);">
-          <i data-lucide="bookmark" style="width:40px;height:40px;margin-bottom:8px;opacity:0.5;"></i>
-          <p>口袋名單目前是空的</p>
-          <small>您可以在上方快速輸入，或點擊「批次匯入 Google Maps 清單」貼上多個景點！</small>
-        </div>
-      `;
-      this.initLucide();
+      c.innerHTML = `<div style="text-align:center;padding:32px 16px;color:var(--text-dim);">
+        <p>口袋名單目前是空的</p>
+        <small>在上方輸入景點名稱，或切換到「批次匯入」標籤貼上 Google Maps 清單。</small></div>`;
       return;
     }
 
-    this.wishlist.forEach((item, index) => {
+    this.wishlist.forEach((item, idx) => {
       const card = document.createElement('div');
       card.className = 'wishlist-item-card';
       card.innerHTML = `
         <div class="wishlist-item-main">
           <div class="wishlist-item-title">📍 ${item.title}</div>
-          <div class="wishlist-item-sub">${item.location || (item.mapLink ? '有 Google Maps 連結' : '尚未設定詳細地址')}</div>
+          <div class="wishlist-item-sub">${item.location || (item.mapLink ? '有 Google Maps 連結' : '尚未設定地址')}</div>
         </div>
         <div class="wishlist-item-actions">
-          <button type="button" class="btn-wishlist-add-to-plan" data-idx="${index}">
+          <button type="button" class="btn-wishlist-add-to-plan" data-idx="${idx}">
             <i data-lucide="${this.wishlistSelectMode ? 'check' : 'plus'}"></i>
             <span>${this.wishlistSelectMode ? '帶入此點' : '加入行程'}</span>
           </button>
-          <button type="button" class="btn-wishlist-del" data-idx="${index}" title="從口袋名單刪除">
-            <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
-          </button>
-        </div>
-      `;
-
-      // Add to plan / select handler
-      card.querySelector('.btn-wishlist-add-to-plan').addEventListener('click', () => {
-        this.useWishlistItem(item);
-      });
-
-      // Delete handler
+          <button type="button" class="btn-wishlist-del" data-idx="${idx}" title="刪除"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
+        </div>`;
+      card.querySelector('.btn-wishlist-add-to-plan').addEventListener('click', () => this.useWishlistItem(item));
       card.querySelector('.btn-wishlist-del').addEventListener('click', () => {
-        this.wishlist.splice(index, 1);
-        this.saveWishlist();
-        this.showToast(`已從口袋名單移除「${item.title}」`);
+        this.wishlist.splice(idx, 1); this.saveWishlist(); this.showToast(`已從口袋名單移除「${item.title}」`);
       });
-
-      container.appendChild(card);
+      c.appendChild(card);
     });
-
     this.initLucide();
   }
 
   handleAddSingleWishlist() {
-    const nameInput = document.getElementById('inputWishlistName');
-    const locInput = document.getElementById('inputWishlistLoc');
-    const title = nameInput.value.trim();
-    const locOrLink = locInput.value.trim();
-
-    if (!title) {
-      alert('請輸入地點或景點名稱！');
-      return;
-    }
-
-    let mapLink = '';
-    let location = '';
-
-    if (locOrLink.startsWith('http://') || locOrLink.startsWith('https://')) {
-      mapLink = locOrLink;
-      location = title;
-    } else {
-      location = locOrLink || title;
-      mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`;
-    }
-
-    this.wishlist.push({
-      id: `wish_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      title,
-      location,
-      mapLink
-    });
-
-    this.saveWishlist();
-    nameInput.value = '';
-    locInput.value = '';
+    const ni = document.getElementById('inputWishlistName');
+    const li = document.getElementById('inputWishlistLoc');
+    const title = ni.value.trim(), loc = li.value.trim();
+    if (!title) { alert('請輸入地點名稱！'); return; }
+    let mapLink = '', location = '';
+    if (loc.startsWith('http')) { mapLink = loc; location = title; }
+    else { location = loc || title; mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`; }
+    this.wishlist.push({ id: `wish_${Date.now()}_${Math.random().toString(36).substr(2,4)}`, title, location, mapLink });
+    this.saveWishlist(); ni.value = ''; li.value = '';
     this.showToast(`已將「${title}」加入口袋名單！`);
   }
 
   handleBatchGoogleMapsImport() {
-    const textarea = document.getElementById('textareaGoogleMapsImport');
-    const text = textarea.value.trim();
-    if (!text) {
-      alert('請先貼上 Google Maps 景點名稱或網址清單！');
-      return;
-    }
+    const ta = document.getElementById('textareaGoogleMapsImport');
+    const text = ta.value.trim();
+    if (!text) { alert('請先貼上景點名稱或網址清單！'); return; }
 
     const lines = text.split('\n');
-    let addedCount = 0;
+    let count = 0;
 
     lines.forEach(line => {
       let raw = line.trim();
       if (!raw) return;
 
-      // Extract URL if line contains http
-      let urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
+      // Try to extract URL
+      const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
       let mapLink = urlMatch ? urlMatch[0] : '';
       let title = raw.replace(/(https?:\/\/[^\s]+)/, '').trim();
-
-      // Clean prefix numbering like 1., 2. or bullets
+      
+      // Clean prefix numbering
       title = title.replace(/^[\d\.\-\*\•\s]+/, '').trim();
 
+      // If line is purely a Google Maps list URL, mark it for special handling
       if (!title && mapLink) {
-        title = "Google Maps 景點";
+        // Check if it's a Google Maps place URL - extract place name from URL
+        const placeMatch = mapLink.match(/place\/([^\/\?]+)/);
+        if (placeMatch) {
+          title = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ');
+        } else {
+          title = 'Google Maps 景點';
+        }
       }
 
       if (title || mapLink) {
-        if (!mapLink && title) {
-          mapLink = `https://maps.google.com/?q=${encodeURIComponent(title)}`;
-        }
+        if (!mapLink && title) mapLink = `https://maps.google.com/?q=${encodeURIComponent(title)}`;
         this.wishlist.push({
-          id: `wish_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-          title: title || '自訂目標景點',
+          id: `wish_${Date.now()}_${Math.random().toString(36).substr(2,4)}_${count}`,
+          title: title || '自訂景點',
           location: title || '',
-          mapLink: mapLink
+          mapLink
         });
-        addedCount++;
+        count++;
       }
     });
 
-    if (addedCount > 0) {
-      this.saveWishlist();
-      textarea.value = '';
+    if (count > 0) {
+      this.saveWishlist(); ta.value = '';
       document.getElementById('tabWishlistItems').click();
-      this.showToast(`成功批次匯入 ${addedCount} 個口袋景點！`);
-    } else {
-      alert('未識別到有效的景點內容，請確認貼上的文字格式。');
-    }
+      this.showToast(`成功批次匯入 ${count} 個口袋景點！`);
+    } else { alert('未識別到有效景點。'); }
   }
 
   useWishlistItem(item) {
     if (this.wishlistSelectMode) {
-      // Direct apply to existing open card modal form fields
       document.getElementById('cardTitle').value = item.title || '';
       document.getElementById('cardLocation').value = item.location || item.title || '';
       document.getElementById('cardMapLink').value = item.mapLink || '';
       this.closeWishlistModal();
-      this.showToast(`已將「${item.title}」帶入行程表單！`);
+      this.showToast(`已將「${item.title}」帶入表單！`);
     } else {
-      // Directly open Add Card Modal with this spot prefilled
       this.closeWishlistModal();
       this.openAddModal();
       document.getElementById('cardTitle').value = item.title || '';
       document.getElementById('cardLocation').value = item.location || item.title || '';
       document.getElementById('cardMapLink').value = item.mapLink || '';
-      this.showToast(`已開啟快速排程，請選擇時段後儲存！`);
+      this.showToast('已開啟快速排程，請選擇時段後儲存！');
     }
   }
 }
 
-// Global Initialization
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+
 window.addEventListener('DOMContentLoaded', () => {
   window.tripManager = new TripManager();
 });
