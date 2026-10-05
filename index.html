@@ -15,6 +15,10 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
@@ -70,6 +74,9 @@
           <button id="btnViewCards" class="btn-view" title="精簡卡片清單">
             <i data-lucide="layout-list"></i>
           </button>
+          <button id="btnViewRoute" class="btn-view" title="地圖目標節點與交通路線規劃圖">
+            <i data-lucide="map"></i>
+          </button>
         </div>
       </div>
     </header>
@@ -88,6 +95,29 @@
       <!-- List Cards Mode (Alternative) -->
       <div id="cardsListContainer" class="cards-list-container hidden">
         <div id="cardsList" class="cards-list"></div>
+      </div>
+
+      <!-- Interactive Map & Node Route Mode -->
+      <div id="routeMapContainer" class="route-map-container hidden">
+        <div class="route-map-header">
+          <div class="route-meta">
+            <span class="route-summary-title">🗺️ 當日景點串聯與動線地圖</span>
+            <span class="route-summary-sub" id="routeTotalInfo">共 0 個節點</span>
+          </div>
+          <a id="btnOpenFullGoogleMapsRoute" href="#" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="一鍵匯入 Google Maps 完整規劃動線">
+            <i data-lucide="navigation"></i>
+            <span>Google 路線規劃</span>
+          </a>
+        </div>
+        <div id="routeLeafletMap" class="route-leaflet-map"></div>
+        <!-- Node Sequence Stepper below the map -->
+        <div class="route-stepper-box">
+          <div class="route-stepper-title">
+            <i data-lucide="milestone"></i>
+            <span>景點串聯節點 & 交通銜接順序</span>
+          </div>
+          <div id="routeStepperList" class="route-stepper-list"></div>
+        </div>
       </div>
     </main>
 

@@ -5,6 +5,7 @@
  * - Multi-day switching & dynamic day creation
  * - Drag and drop card rescheduling (drag up/down to adjust 30m slots)
  * - Overlap detection & visual side-by-side / offset layout
+ * - Interactive Route Map: Target Nodes, sequential polylines, transport mode tags & Google Multi-stop Route URL
  * - Google Maps URL parsing & automatic interactive embed
  * - JSON LocalStorage persistence, import, export & share code
  * - Transport method selection between spots
@@ -31,7 +32,34 @@ const TRANSPORT_MAP = {
   car: '🚗 自駕/租車'
 };
 
-// Default Initial Demo Itinerary (Tokyo 5 Days)
+// Known coordinates dictionary for instant mapping without geocoding delays
+const KNOWN_GEO_DICT = {
+  "羽田": [35.5494, 139.7798],
+  "haneda": [35.5494, 139.7798],
+  "新宿": [35.6909, 139.7003],
+  "shinjuku": [35.6909, 139.7003],
+  "敘敘苑": [35.6918, 139.7015],
+  "jojoen": [35.6918, 139.7015],
+  "明治神宮": [35.6764, 139.6993],
+  "meiji": [35.6764, 139.6993],
+  "shibuya sky": [35.6585, 139.7023],
+  "澀谷": [35.6595, 139.7005],
+  "shibuya": [35.6595, 139.7005],
+  "淺草": [35.7148, 139.7967],
+  "sensoji": [35.7148, 139.7967],
+  "晴空塔": [35.7101, 139.8107],
+  "skytree": [35.7101, 139.8107],
+  "迪士尼": [35.6267, 139.8851],
+  "disney": [35.6267, 139.8851],
+  "銀座": [35.6719, 139.7640],
+  "ginza": [35.6719, 139.7640],
+  "六本木": [35.6628, 139.7313],
+  "roppongi": [35.6628, 139.7313],
+  "台北": [25.0330, 121.5654],
+  "taipei": [25.0330, 121.5654]
+};
+
+// Default Initial Demo Itinerary (Tokyo 5 Days) with Geo-coordinates
 const INITIAL_DEMO_DATA = {
   title: "東京探索自由行 5 天 4 夜",
   startDate: "2026-10-10",
@@ -49,6 +77,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "10:30",
           color: "#38bdf8",
           location: "東京羽田機場",
+          lat: 35.5494,
+          lng: 139.7798,
           mapLink: "https://maps.google.com/?q=Tokyo+Haneda+Airport",
           url: "https://tokyo-haneda.com/",
           transportType: "subway",
@@ -62,6 +92,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "12:30",
           color: "#818cf8",
           location: "新宿燦路都廣場大飯店",
+          lat: 35.6882,
+          lng: 139.6995,
           mapLink: "https://maps.google.com/?q=Hotel+Sunroute+Plaza+Shinjuku",
           url: "",
           transportType: "walk",
@@ -74,7 +106,9 @@ const INITIAL_DEMO_DATA = {
           startTime: "13:00",
           endTime: "14:30",
           color: "#fb923c",
-          location: "敘敘苑 新宿",
+          location: "敘敘苑 新宿中央東口店",
+          lat: 35.6918,
+          lng: 139.7015,
           mapLink: "https://maps.google.com/?q=Jojoen+Shinjuku",
           url: "https://www.jojoen.co.jp/",
           transportType: "walk",
@@ -88,6 +122,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "17:00",
           color: "#34d399",
           location: "明治神宮",
+          lat: 35.6764,
+          lng: 139.6993,
           mapLink: "https://maps.google.com/?q=Meiji+Jingu",
           url: "https://www.meijijingu.or.jp/",
           transportType: "subway",
@@ -101,6 +137,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "19:30",
           color: "#c084fc",
           location: "SHIBUYA SKY",
+          lat: 35.6585,
+          lng: 139.7023,
           mapLink: "https://maps.google.com/?q=Shibuya+Sky",
           url: "https://www.shibuya-scramble-square.com/sky/",
           transportType: "subway",
@@ -121,6 +159,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "12:00",
           color: "#fb7185",
           location: "淺草寺 雷門",
+          lat: 35.7118,
+          lng: 139.7967,
           mapLink: "https://maps.google.com/?q=Sensoji+Temple",
           url: "https://www.senso-ji.jp/",
           transportType: "subway",
@@ -134,6 +174,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "15:30",
           color: "#38bdf8",
           location: "東京晴空塔 Tokyo Skytree",
+          lat: 35.7101,
+          lng: 139.8107,
           mapLink: "https://maps.google.com/?q=Tokyo+Skytree",
           url: "https://www.tokyo-skytree.jp/",
           transportType: "walk",
@@ -154,6 +196,8 @@ const INITIAL_DEMO_DATA = {
           endTime: "21:30",
           color: "#fbbf24",
           location: "Tokyo DisneySea",
+          lat: 35.6267,
+          lng: 139.8851,
           mapLink: "https://maps.google.com/?q=Tokyo+DisneySea",
           url: "https://www.tokyodisneyresort.jp/tc/tds/",
           transportType: "subway",
@@ -182,9 +226,13 @@ class TripManager {
   constructor() {
     this.storageKey = 'travelgogo_itinerary_data';
     this.themeKey = 'travelgogo_theme';
-    this.currentViewMode = 'timeline'; // 'timeline' or 'cards'
+    this.currentViewMode = 'timeline'; // 'timeline' | 'cards' | 'route'
     this.selectedTransportType = 'subway';
     this.selectedColor = COLOR_PRESETS[0];
+    
+    // Leaflet map instance
+    this.leafletMap = null;
+    this.mapLayersGroup = null;
     
     // Drag state
     this.draggedCardId = null;
@@ -263,6 +311,9 @@ class TripManager {
     this.renderTimeRuler();
     this.renderSchedule();
     this.renderCardsList();
+    if (this.currentViewMode === 'route') {
+      this.renderRouteMap();
+    }
     this.initLucide();
   }
 
@@ -302,7 +353,6 @@ class TripManager {
     const ruler = document.getElementById('timeRuler');
     ruler.innerHTML = '';
     
-    // We cover from 06:00 to 24:00 (18 hours = 36 slots)
     for (let slot = 0; slot < 36; slot++) {
       const totalMinutes = (6 * 60) + (slot * 30);
       const h = Math.floor(totalMinutes / 60);
@@ -452,7 +502,6 @@ class TripManager {
         const c2 = cards[j];
         const start2 = this.timeToSlot(c2.startTime);
         const end2 = this.timeToSlot(c2.endTime);
-        // Overlap test
         if (start1 < end2 && end1 > start2) {
           overlapping.push(c2);
         }
@@ -476,7 +525,6 @@ class TripManager {
     let hasMoved = false;
 
     const onPointerDown = (e) => {
-      // Don't drag if clicking buttons inside
       if (e.target.closest('.badge-icon-btn')) return;
       
       startY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -570,6 +618,151 @@ class TripManager {
     this.initLucide();
   }
 
+  // ==========================================================================
+  // Target Node Route Map & Sequential Polyline Logic (Leaflet)
+  // ==========================================================================
+  resolveCoordinates(card, index) {
+    if (typeof card.lat === 'number' && typeof card.lng === 'number') {
+      return [card.lat, card.lng];
+    }
+    const targetStr = (card.location + ' ' + card.title + ' ' + (card.mapLink || '')).toLowerCase();
+    for (const [key, coords] of Object.entries(KNOWN_GEO_DICT)) {
+      if (targetStr.includes(key)) {
+        return coords;
+      }
+    }
+    // Default fallback coordinates around central Tokyo with slight offset per index
+    return [35.6812 + (index * 0.015), 139.7671 + (index * 0.012)];
+  }
+
+  renderRouteMap() {
+    const currentDay = this.getCurrentDay();
+    const sortedCards = [...currentDay.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    const stepperList = document.getElementById('routeStepperList');
+    stepperList.innerHTML = '';
+
+    document.getElementById('routeTotalInfo').textContent = `共 ${sortedCards.length} 個景點節點串聯`;
+
+    // Initialize Leaflet Map if not already initialized
+    if (!this.leafletMap) {
+      this.leafletMap = L.map('routeLeafletMap', {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([35.6895, 139.6917], 12);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(this.leafletMap);
+
+      this.mapLayersGroup = L.layerGroup().addTo(this.leafletMap);
+    } else {
+      this.mapLayersGroup.clearLayers();
+    }
+
+    if (sortedCards.length === 0) {
+      stepperList.innerHTML = `
+        <p style="color:var(--text-dim);text-align:center;padding:16px;">今日尚無景點資料，請先新增行程！</p>
+      `;
+      return;
+    }
+
+    const latLngPoints = [];
+    const googleWaypoints = [];
+
+    sortedCards.forEach((card, i) => {
+      const nodeNum = i + 1;
+      const coords = this.resolveCoordinates(card, i);
+      latLngPoints.push(coords);
+      googleWaypoints.push(encodeURIComponent(card.location || card.title));
+
+      // Custom HTML Marker with Step Number Badge
+      const customIcon = L.divIcon({
+        className: 'custom-map-node',
+        html: `<div class="node-pin-bubble" style="background-color:${card.color || '#38bdf8'}">${nodeNum}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      const marker = L.marker(coords, { icon: customIcon }).addTo(this.mapLayersGroup);
+      
+      const popupHtml = `
+        <div style="font-family:var(--font-family);min-width:140px;">
+          <b style="font-size:0.95rem;color:#0f172a;">#${nodeNum} ${card.title}</b>
+          <div style="font-size:0.8rem;color:#475569;margin-top:2px;">🕒 ${card.startTime} - ${card.endTime}</div>
+          <div style="font-size:0.8rem;color:#0284c7;margin-top:2px;">📍 ${card.location || '無地點'}</div>
+        </div>
+      `;
+      marker.bindPopup(popupHtml);
+
+      // Render Step sequence item in the stepper list below map
+      const nextCard = sortedCards[i + 1];
+      const stepperItem = document.createElement('div');
+      stepperItem.className = 'stepper-node-item';
+      stepperItem.innerHTML = `
+        <div class="stepper-line"></div>
+        <div class="stepper-badge" style="background:${card.color || '#38bdf8'}">${nodeNum}</div>
+        <div class="stepper-info">
+          <div class="stepper-header">
+            <span class="stepper-name">${card.title}</span>
+            <span class="stepper-time">${card.startTime}</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-muted);">${card.location || '自訂目標'}</div>
+          ${nextCard && nextCard.transportNote ? `
+            <div class="stepper-transit-tag">
+              ${TRANSPORT_MAP[nextCard.transportType] || '🚗 交通'}：${nextCard.transportNote}
+            </div>
+          ` : ''}
+        </div>
+      `;
+      stepperItem.addEventListener('click', () => {
+        this.leafletMap.flyTo(coords, 14, { duration: 0.8 });
+        marker.openPopup();
+      });
+      stepperList.appendChild(stepperItem);
+    });
+
+    // Draw Connected Polyline between consecutive nodes
+    if (latLngPoints.length > 1) {
+      const polyline = L.polyline(latLngPoints, {
+        color: '#38bdf8',
+        weight: 4,
+        opacity: 0.85,
+        dashArray: '8, 8',
+        lineCap: 'round'
+      }).addTo(this.mapLayersGroup);
+
+      this.leafletMap.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+    } else {
+      this.leafletMap.setView(latLngPoints[0], 13);
+    }
+
+    // Google Maps multi-point route direction generation
+    const fullRouteBtn = document.getElementById('btnOpenFullGoogleMapsRoute');
+    if (googleWaypoints.length >= 2) {
+      const origin = googleWaypoints[0];
+      const destination = googleWaypoints[googleWaypoints.length - 1];
+      const waypointsStr = googleWaypoints.slice(1, -1).join('|');
+      let gUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+      if (waypointsStr) {
+        gUrl += `&waypoints=${waypointsStr}`;
+      }
+      fullRouteBtn.href = gUrl;
+      fullRouteBtn.classList.remove('hidden');
+    } else if (googleWaypoints.length === 1) {
+      fullRouteBtn.href = `https://maps.google.com/?q=${googleWaypoints[0]}`;
+      fullRouteBtn.classList.remove('hidden');
+    } else {
+      fullRouteBtn.classList.add('hidden');
+    }
+
+    // Leaflet map refresh size
+    setTimeout(() => {
+      this.leafletMap.invalidateSize();
+    }, 200);
+
+    this.initLucide();
+  }
+
   // --- Modals & User Actions ---
 
   setupEventListeners() {
@@ -596,18 +789,42 @@ class TripManager {
     });
 
     // View switchers
-    document.getElementById('btnViewTimeline').addEventListener('click', () => {
-      document.getElementById('btnViewTimeline').classList.add('active');
-      document.getElementById('btnViewCards').classList.remove('active');
-      document.getElementById('timelineContainer').classList.remove('hidden');
-      document.getElementById('cardsListContainer').classList.add('hidden');
+    const btnTimeline = document.getElementById('btnViewTimeline');
+    const btnCards = document.getElementById('btnViewCards');
+    const btnRoute = document.getElementById('btnViewRoute');
+    const viewTimeline = document.getElementById('timelineContainer');
+    const viewCards = document.getElementById('cardsListContainer');
+    const viewRoute = document.getElementById('routeMapContainer');
+
+    btnTimeline.addEventListener('click', () => {
+      this.currentViewMode = 'timeline';
+      btnTimeline.classList.add('active');
+      btnCards.classList.remove('active');
+      btnRoute.classList.remove('active');
+      viewTimeline.classList.remove('hidden');
+      viewCards.classList.add('hidden');
+      viewRoute.classList.add('hidden');
     });
 
-    document.getElementById('btnViewCards').addEventListener('click', () => {
-      document.getElementById('btnViewCards').classList.add('active');
-      document.getElementById('btnViewTimeline').classList.remove('active');
-      document.getElementById('cardsListContainer').classList.remove('hidden');
-      document.getElementById('timelineContainer').classList.add('hidden');
+    btnCards.addEventListener('click', () => {
+      this.currentViewMode = 'cards';
+      btnCards.classList.add('active');
+      btnTimeline.classList.remove('active');
+      btnRoute.classList.remove('active');
+      viewCards.classList.remove('hidden');
+      viewTimeline.classList.add('hidden');
+      viewRoute.classList.add('hidden');
+    });
+
+    btnRoute.addEventListener('click', () => {
+      this.currentViewMode = 'route';
+      btnRoute.classList.add('active');
+      btnTimeline.classList.remove('active');
+      btnCards.classList.remove('active');
+      viewRoute.classList.remove('hidden');
+      viewTimeline.classList.add('hidden');
+      viewCards.classList.add('hidden');
+      this.renderRouteMap();
     });
 
     // Editable Trip Title
@@ -787,7 +1004,6 @@ class TripManager {
     const notes = document.getElementById('cardNotes').value.trim();
     const color = this.selectedColor;
 
-    // Auto-generate Google maps link if location is specified but mapLink is empty
     if (!mapLink && location) {
       mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`;
     }
@@ -795,7 +1011,6 @@ class TripManager {
     const currentDay = this.getCurrentDay();
 
     if (id) {
-      // Edit existing
       const card = currentDay.cards.find(c => c.id === id);
       if (card) {
         Object.assign(card, {
@@ -804,7 +1019,6 @@ class TripManager {
         });
       }
     } else {
-      // Add new card
       const newCard = {
         id: `card_${Date.now()}`,
         title, startTime, endTime, color, location, mapLink, url,
@@ -839,7 +1053,6 @@ class TripManager {
     document.getElementById('detailTitle').textContent = card.title;
     document.getElementById('detailTimeBadge').textContent = `${card.startTime} - ${card.endTime}`;
     
-    // Transport display
     const transportBox = document.getElementById('detailTransportBox');
     if (card.transportNote || card.transportType) {
       transportBox.classList.remove('hidden');
@@ -849,7 +1062,6 @@ class TripManager {
       transportBox.classList.add('hidden');
     }
 
-    // Location & Open in Map
     const locItem = document.getElementById('detailLocationItem');
     const locText = document.getElementById('detailLocationText');
     const mapOpenBtn = document.getElementById('detailMapOpenBtn');
@@ -864,7 +1076,6 @@ class TripManager {
       mapOpenBtn.classList.add('hidden');
     }
 
-    // External link
     const linkItem = document.getElementById('detailLinkItem');
     const externalLink = document.getElementById('detailExternalLink');
     if (card.url) {
@@ -875,7 +1086,6 @@ class TripManager {
       linkItem.classList.add('hidden');
     }
 
-    // Embedded Map Logic (Using Google Maps Embed / Search query)
     const mapFrame = document.getElementById('mapFrame');
     const mapFallback = document.getElementById('mapFallback');
     const query = card.location || (card.mapLink ? this.extractMapQuery(card.mapLink) : card.title);
@@ -883,7 +1093,6 @@ class TripManager {
     if (query) {
       mapFrame.classList.remove('hidden');
       mapFallback.classList.add('hidden');
-      // Google Maps Embed Query format
       const embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
       mapFrame.src = embedUrl;
     } else {
@@ -891,7 +1100,6 @@ class TripManager {
       mapFallback.classList.remove('hidden');
     }
 
-    // Notes
     const notesText = document.getElementById('detailNotesText');
     notesText.textContent = card.notes || '尚無特別備註。點擊下方「編輯此卡片」隨時補充！';
 
@@ -911,7 +1119,6 @@ class TripManager {
   closeDetailModal() {
     const modal = document.getElementById('detailModal');
     modal.classList.add('hidden');
-    // Clear iframe source to avoid background playing/loading
     document.getElementById('mapFrame').src = '';
   }
 
@@ -959,7 +1166,7 @@ class TripManager {
       }
     };
     reader.readAsText(file);
-    event.target.value = ''; // Reset input
+    event.target.value = '';
   }
 
   copyShareCode() {
