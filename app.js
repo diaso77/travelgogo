@@ -217,7 +217,15 @@ class TripManager {
   updateTimeIndicator() {
     const old = document.querySelector('.current-time-line');
     if (old) old.remove();
+
+    const cur = this.getCurrentDay();
+    if (!cur) return;
     const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    // Only show current time indicator if the viewing day is TODAY
+    if (cur.date !== todayStr) return;
+
     const totalMin = now.getHours() * 60 + now.getMinutes();
     const slot = totalMin / SLOT_MINUTES;
     const topPx = slot * SLOT_HEIGHT;
@@ -225,9 +233,10 @@ class TripManager {
     if (!canvas || this.currentViewMode !== 'timeline' || this.currentSpanDays > 1) return;
     const line = document.createElement('div');
     line.className = 'current-time-line';
+    line.id = 'currentTimeIndicator';
     line.style.top = `${topPx}px`;
     const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    line.innerHTML = `<span class="current-time-label">${ts}</span>`;
+    line.innerHTML = `<span class="current-time-label">🔴 現在 ${ts}</span>`;
     canvas.appendChild(line);
   }
 
@@ -267,11 +276,15 @@ class TripManager {
     container.innerHTML = '';
     this.data.days.forEach((day, i) => {
       const tab = document.createElement('button');
-      tab.className = `day-tab ${i === this.data.currentDayIndex ? 'active' : ''}`;
+      const isActive = i === this.data.currentDayIndex;
+      tab.className = `day-tab ${isActive ? 'active' : ''}`;
       tab.innerHTML = `<span>Day ${day.dayNumber}</span><small style="opacity:0.8">${formatDateStr(day.date)}</small>`;
       tab.addEventListener('click', () => { this.data.currentDayIndex = i; this.saveData(); this.renderAll(); });
       tab.addEventListener('contextmenu', (e) => { e.preventDefault(); this.showDayContextMenu(i, e); });
       container.appendChild(tab);
+      if (isActive) {
+        setTimeout(() => tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 50);
+      }
     });
 
     const cur = this.getCurrentDay();
@@ -478,12 +491,14 @@ class TripManager {
       const tLabel = TRANSPORT_MAP[card.transportType] || '';
       const costHtml = (card.cost && parseFloat(card.cost) > 0)
         ? `<span class="card-cost-badge">${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</span>` : '';
+      const overlapBadge = (lay && lay.totalCols > 1) 
+        ? `<span class="overlap-warning-badge" title="此時段有其他行程重疊並排"><i data-lucide="layers" style="width:11px;height:11px;"></i> 重疊</span>` : '';
 
       el.innerHTML = `
         <div class="card-top">
           <div class="card-title-group">
             <h4 class="card-title">${card.title}</h4>
-            <div class="card-time-span"><i data-lucide="clock" style="width:12px;height:12px;"></i><span>${card.startTime} - ${card.endTime}</span>${costHtml}</div>
+            <div class="card-time-span"><i data-lucide="clock" style="width:12px;height:12px;"></i><span>${card.startTime} - ${card.endTime}</span>${overlapBadge}${costHtml}</div>
           </div>
           <div class="card-badges">
             ${card.mapLink ? '<span class="badge-icon-btn" title="有 Google 地圖定位"><i data-lucide="map-pin" style="width:13px;height:13px;"></i></span>' : ''}
@@ -499,20 +514,31 @@ class TripManager {
       this.attachDragEvents(el, card, ss, dur);
       canvas.appendChild(el);
 
-      // Transit indicator
+      // Transit or Free-time Gap indicator
       if (idx < sorted.length - 1) {
         const next = sorted[idx + 1];
         const ns = this.timeToSlot(next.startTime);
-        if (ns >= es && next.transportNote) {
+        if (ns > es) {
+          const gapMin = (ns - es) * SLOT_MINUTES;
           const tTop = es * SLOT_HEIGHT;
           const tHt = (ns - es) * SLOT_HEIGHT;
-          if (tHt >= 16) {
-            const te = document.createElement('div');
-            te.className = 'transit-indicator';
-            te.style.top = `${tTop + (tHt / 2) - 10}px`;
-            te.innerHTML = `<span>${TRANSPORT_MAP[next.transportType] || '🚗 交通'}：${next.transportNote}</span>`;
-            te.addEventListener('click', (e) => { e.stopPropagation(); this.openEditModal(next); });
-            canvas.appendChild(te);
+
+          if (next.transportNote) {
+            if (tHt >= 16) {
+              const te = document.createElement('div');
+              te.className = 'transit-indicator';
+              te.style.top = `${tTop + (tHt / 2) - 10}px`;
+              te.innerHTML = `<span>${TRANSPORT_MAP[next.transportType] || '🚗 交通'}：${next.transportNote}</span>`;
+              te.addEventListener('click', (e) => { e.stopPropagation(); this.openEditModal(next); });
+              canvas.appendChild(te);
+            }
+          } else if (gapMin >= 30 && tHt >= 24) {
+            const ge = document.createElement('div');
+            ge.className = 'schedule-gap-indicator';
+            ge.style.top = `${tTop + (tHt / 2) - 12}px`;
+            ge.style.height = '24px';
+            ge.innerHTML = `<span>☕ 自由空檔 ${gapMin} 分鐘</span>`;
+            canvas.appendChild(ge);
           }
         }
       }
@@ -1786,10 +1812,31 @@ class TripManager {
       // Checkbox toggle
       row.querySelector('.parsed-item-check').addEventListener('change', () => {
         this.updateImportButtonCount();
+        const selectAll = document.getElementById('checkSelectAllParsed');
+        if (selectAll) {
+          const all = itemsList.querySelectorAll('.parsed-item-check');
+          const checked = itemsList.querySelectorAll('.parsed-item-check:checked');
+          selectAll.checked = all.length > 0 && checked.length === all.length;
+        }
       });
 
       itemsList.appendChild(row);
     });
+
+    // Master select-all checkbox
+    const selectAll = document.getElementById('checkSelectAllParsed');
+    if (selectAll) {
+      const all = itemsList.querySelectorAll('.parsed-item-check');
+      const checked = itemsList.querySelectorAll('.parsed-item-check:checked');
+      selectAll.checked = all.length > 0 && checked.length === all.length;
+      selectAll.onchange = (e) => {
+        const isChecked = e.target.checked;
+        itemsList.querySelectorAll('.parsed-item-check').forEach(chk => {
+          chk.checked = isChecked;
+        });
+        this.updateImportButtonCount();
+      };
+    }
 
     this.populateDaySelectorInImport();
     this.updateImportButtonCount();

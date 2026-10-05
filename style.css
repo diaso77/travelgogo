@@ -100,6 +100,32 @@ body {
   box-shadow: 0 0 50px rgba(0, 0, 0, 0.3);
 }
 
+/* iOS Safe Area Insets (notch / Dynamic Island / home bar) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app-header {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .mobile-float-bar {
+    bottom: max(16px, env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .main-viewport {
+    padding-bottom: max(90px, calc(60px + env(safe-area-inset-bottom)));
+  }
+  /* Bottom-sheet modals on phone need extra padding for home bar */
+  @media (max-width: 479px) {
+    .modal-card {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .mobile-float-bar {
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+  }
+}
+
 /* Header Styles */
 .app-header {
   position: sticky;
@@ -1212,18 +1238,217 @@ input[type="date"] {
   display: none !important;
 }
 
-/* Responsive Utilities */
-@media (min-width: 768px) {
-  .app-container {
-    border-left: 1px solid var(--border-subtle);
-    border-right: 1px solid var(--border-subtle);
-  }
+/* ==========================================================================
+   Responsive Design System
+   Breakpoints:
+     xs: <380px   (very small phones, older devices)
+     sm: <480px   (normal phones)
+     md: 768px+   (tablet portrait)
+     lg: 1024px+  (tablet landscape / small laptop)
+     xl: 1280px+  (desktop)
+   ========================================================================== */
+
+/* ── XS: Very small phones (< 380px) ───────────────────────────────────── */
+@media (max-width: 380px) {
+  .app-title { font-size: 1rem; }
+  .brand-icon { width: 36px; height: 36px; font-size: 20px; }
+  .app-header { padding: 8px 10px 4px; gap: 6px; }
+  .header-actions { gap: 2px; }
+  .header-actions .btn-text { display: none; }
+  .btn-icon { width: 34px; height: 34px; }
+  .btn-primary { padding: 7px 10px; font-size: 0.8rem; }
+  .span-range-pills { display: none; }
+  .day-tab { padding: 4px 10px; font-size: 0.75rem; }
+  .day-tab small { display: none; }
+  .mobile-float-bar { padding: 6px 8px; }
+  .float-btn { font-size: 0.6rem; }
+  .modal-body { padding: 14px; gap: 12px; }
+  .modal-header { padding: 12px 14px; }
+  .modal-header h3 { font-size: 1rem; }
+  .card-title { font-size: 0.82rem; }
+  .form-row { flex-direction: column; gap: 8px; }
+  :root { --time-col-width: 44px; }
+  .wishlist-filter-bar { flex-wrap: wrap; }
 }
 
-@media (max-width: 420px) {
+/* ── SM: Normal phones (380px - 479px) ──────────────────────────────────── */
+@media (max-width: 479px) {
   .header-actions .btn-text { display: none; }
   .header-actions { gap: 4px; }
   .span-range-pills { display: none; }
+  .day-tab small { font-size: 0.68rem; }
+  .modal-card { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal-card { max-height: 95vh; }
+  .mobile-float-bar {
+    bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 16px env(safe-area-inset-bottom, 0);
+  }
+  .main-viewport { padding-bottom: 80px; }
+  .time-jump-bar { padding: 5px 10px; }
+  .jump-label { display: none; }
+  .parsed-preview-container { border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  .wishlist-filter-bar { gap: 6px; }
+}
+
+/* ── MD: Tablet portrait (768px+) ───────────────────────────────────────── */
+@media (min-width: 768px) {
+  /* Wider container */
+  .app-container {
+    max-width: 780px;
+    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  /* Show text labels in header */
+  .header-actions .btn-text { display: inline; }
+  .header-actions { gap: 8px; }
+
+  /* Larger header */
+  .app-header { padding: 14px 20px 8px; gap: 12px; }
+  .app-title { font-size: 1.4rem; }
+  .app-subtitle { font-size: 0.9rem; }
+  .brand-icon { width: 48px; height: 48px; font-size: 28px; }
+
+  /* Show span pills */
+  .span-range-pills { display: flex; }
+
+  /* Day tabs bigger */
+  .day-tab { padding: 7px 18px; font-size: 0.875rem; }
+
+  /* Timeline ruler wider */
+  :root { --time-col-width: 64px; --slot-height: 22px; }
+  .timeline-container { min-height: calc(144 * var(--slot-height)); }
+
+  /* Activity cards more padding */
+  .activity-card { padding: 8px 14px; }
+  .card-title { font-size: 0.95rem; }
+
+  /* Modal wider */
+  .modal-card { max-width: 620px; border-radius: var(--radius-lg); }
+  .modal-backdrop { align-items: center; padding: 24px; }
+  .modal-body { padding: 24px; gap: 18px; }
+  .modal-header { padding: 18px 24px; }
+  .modal-header h3 { font-size: 1.2rem; }
+
+  /* Floating bar wider */
+  .mobile-float-bar {
+    max-width: 600px;
+    bottom: 20px;
+    border-radius: var(--radius-full);
+    padding: 10px 16px;
+  }
+  .float-btn { font-size: 0.75rem; }
+
+  /* Time jump bar more spacious */
+  .time-jump-bar { padding: 8px 16px; gap: 8px; }
+  .jump-label { display: inline-flex; font-size: 0.85rem; }
+  .jump-chip { padding: 5px 12px; font-size: 0.78rem; }
+
+  /* List mode card wider */
+  .list-item-card { padding: 14px 20px; }
+  .list-time-block { min-width: 72px; font-size: 0.9rem; }
+
+  /* Form rows stay horizontal */
+  .form-row { flex-direction: row; }
+
+  /* Wishlist modal wider */
+  .modal-wishlist-card { max-width: 680px; }
+  .wishlist-items-container { max-height: 480px; }
+  .parsed-items-list { max-height: 380px; }
+}
+
+/* ── LG: Tablet landscape / small laptop (1024px+) ──────────────────────── */
+@media (min-width: 1024px) {
+  /* Two-column layout: timeline on left, sidebar on right */
+  body { overflow-x: hidden; }
+
+  .app-container {
+    max-width: 1100px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+  }
+
+  /* Header full-width */
+  .app-header {
+    grid-column: 1 / -1;
+    padding: 14px 28px 10px;
+  }
+
+  /* Larger brand */
+  .app-title { font-size: 1.5rem; }
+  .brand-icon { width: 52px; height: 52px; font-size: 30px; }
+
+  /* Day tabs wider */
+  .day-tab { padding: 8px 20px; font-size: 0.9rem; }
+
+  /* Timeline even more spacious */
+  :root { --time-col-width: 72px; --slot-height: 24px; }
+  .timeline-container { min-height: calc(144 * var(--slot-height)); padding: 10px 16px 32px 0; }
+
+  /* Activity cards larger */
+  .activity-card { padding: 10px 16px; border-left-width: 6px; }
+  .card-title { font-size: 1rem; }
+  .card-time-span { font-size: 0.78rem; }
+  .card-bottom { font-size: 0.78rem; }
+
+  /* Modal bigger */
+  .modal-card { max-width: 720px; }
+  .modal-body { padding: 28px; }
+  .modal-header { padding: 20px 28px; }
+
+  /* Float bar on desktop: pin to right side as a sidebar tab */
+  .mobile-float-bar {
+    max-width: 700px;
+    bottom: 24px;
+    padding: 12px 24px;
+  }
+
+  /* Time jump bar */
+  .time-jump-bar { padding: 10px 20px; gap: 10px; }
+  .jump-chip { padding: 6px 14px; }
+
+  /* Route map bigger */
+  .route-leaflet-map { height: 420px; }
+
+  /* Wishlist modal */
+  .modal-wishlist-card { max-width: 780px; }
+  .wishlist-items-container { max-height: 560px; }
+  .parsed-items-list { max-height: 460px; }
+}
+
+/* ── XL: Desktop (1280px+) ──────────────────────────────────────────────── */
+@media (min-width: 1280px) {
+  .app-container {
+    max-width: 1200px;
+  }
+
+  .app-header { padding: 16px 32px 10px; }
+  .app-title { font-size: 1.6rem; }
+
+  /* Day tabs */
+  .day-tab { padding: 8px 22px; font-size: 0.95rem; }
+
+  /* Timeline */
+  :root { --time-col-width: 80px; --slot-height: 26px; }
+  .timeline-container { min-height: calc(144 * var(--slot-height)); }
+
+  /* Activity cards */
+  .activity-card { padding: 10px 18px; }
+
+  /* Float bar */
+  .mobile-float-bar { max-width: 800px; bottom: 28px; }
+
+  /* Route map */
+  .route-leaflet-map { height: 500px; }
+
+  /* Modals */
+  .modal-card { max-width: 800px; }
+  .modal-wishlist-card { max-width: 900px; }
 }
 
 /* ==========================================================================
@@ -2109,5 +2334,130 @@ input[type="date"] {
   color: var(--text-muted);
   width: 100%;
 }
+
+/* Schedule Gap & Free Time Indicator */
+.schedule-gap-indicator {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-top: 1px dashed rgba(148, 163, 184, 0.28);
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.04);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Overlap Conflict Warning Chip on Card */
+.overlap-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+/* Current Time Indicator Glowing Pulse */
+.current-time-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+  z-index: 20;
+  pointer-events: none;
+}
+.current-time-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.9);
+  animation: pulse-dot 1.8s infinite;
+}
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 12px rgba(239, 68, 68, 1); }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.current-time-label {
+  position: absolute;
+  left: 8px;
+  top: -18px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+  background: #ef4444;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+}
+
+/* Print Styles for Physical Travel Guide / PDF Export */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .app-header,
+  .quick-nav-bar,
+  .time-jump-bar,
+  .floating-action-group,
+  .day-context-menu,
+  .modal-backdrop,
+  .btn-icon,
+  .btn-primary,
+  .btn-secondary,
+  .badge-icon-btn,
+  .card-drag-handle {
+    display: none !important;
+  }
+  .app-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .day-tabs-container {
+    border-bottom: 2px solid #333 !important;
+    padding: 8px 0 !important;
+  }
+  .activity-card, .list-card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    background: #fdfdfd !important;
+  }
+  .day-tab {
+    color: #000 !important;
+    border-color: #333 !important;
+  }
+  .day-tab.active {
+    background: #eee !important;
+    color: #000 !important;
+    font-weight: bold;
+  }
+}
+
 
 
