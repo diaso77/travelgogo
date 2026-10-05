@@ -101,6 +101,17 @@
 
     <!-- Main Content Area -->
     <main class="main-viewport">
+      <!-- Quick Time Jump Bar -->
+      <div class="time-jump-bar" id="timeJumpBar">
+        <span class="jump-label"><i data-lucide="compass" style="width:14px;height:14px;"></i> 時段：</span>
+        <button type="button" class="jump-chip jump-now" id="btnJumpNow" title="捲動到現在時間點">⏱️ 現在</button>
+        <button type="button" class="jump-chip" data-time="08:00">🌅 08:00</button>
+        <button type="button" class="jump-chip" data-time="12:00">☀️ 12:00</button>
+        <button type="button" class="jump-chip" data-time="15:00">☕ 15:00</button>
+        <button type="button" class="jump-chip" data-time="18:00">🌆 18:00</button>
+        <button type="button" class="jump-chip" data-time="21:00">🌙 21:00</button>
+      </div>
+
       <!-- Vertical Timeline Mode -->
       <div id="timelineContainer" class="timeline-container">
         <!-- 10-min interval ruler and droppable canvas -->
@@ -198,6 +209,14 @@
             <label for="cardEndTime">結束時間 *</label>
             <select id="cardEndTime" required></select>
           </div>
+        </div>
+
+        <div class="quick-duration-row">
+          <span class="quick-duration-label">快速長度：</span>
+          <button type="button" class="duration-chip" data-min="30">+30分</button>
+          <button type="button" class="duration-chip" data-min="60">+1小時</button>
+          <button type="button" class="duration-chip" data-min="90">+1.5小時</button>
+          <button type="button" class="duration-chip" data-min="120">+2小時</button>
         </div>
 
         <div class="form-row">
@@ -469,6 +488,15 @@
             <label for="modalEndDate">🛬 結束日期</label>
             <input type="date" id="modalEndDate" class="form-control">
           </div>
+        </div>
+        <div class="quick-days-presets">
+          <span class="quick-presets-label">快速天數：</span>
+          <button type="button" class="sample-chip btn-preset-days" data-days="3">3天</button>
+          <button type="button" class="sample-chip btn-preset-days" data-days="4">4天</button>
+          <button type="button" class="sample-chip btn-preset-days" data-days="5">5天 (推薦)</button>
+          <button type="button" class="sample-chip btn-preset-days" data-days="6">6天</button>
+          <button type="button" class="sample-chip btn-preset-days" data-days="7">7天 (一週)</button>
+          <button type="button" class="sample-chip btn-preset-days" data-days="10">10天</button>
         </div>
         <div class="date-calc-box" style="margin:12px 0;padding:12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-subtle);text-align:center;">
           <span style="font-size:0.85rem;color:var(--text-muted);">預計建立：</span>

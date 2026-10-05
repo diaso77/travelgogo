@@ -2009,3 +2009,105 @@ input[type="date"] {
   font-size: 0.78rem;
 }
 
+/* Time Jump Bar (Sticky under header) */
+.time-jump-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  z-index: 20;
+}
+.time-jump-bar::-webkit-scrollbar {
+  display: none;
+}
+.jump-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.jump-chip {
+  padding: 4px 9px;
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+.jump-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+.jump-chip.jump-now {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  font-weight: 700;
+}
+.jump-chip.jump-now:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Quick Duration Row in Card Modal */
+.quick-duration-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.quick-duration-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.duration-chip {
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.duration-chip:hover {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+}
+
+/* Quick Days Presets in Date Range Modal */
+.quick-days-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.quick-presets-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 100%;
+}
+
+

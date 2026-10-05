@@ -62,6 +62,18 @@ const KNOWN_GEO_DICT = {
   "台場":[35.6268,139.7753],"odaiba":[35.6268,139.7753],
   "京都":[35.0116,135.7681],"kyoto":[35.0116,135.7681],
   "大阪":[34.6937,135.5023],"osaka":[34.6937,135.5023],
+  "南機場":[25.0292,121.5059],"spotaka":[34.6726,135.4988],
+  "riders fact":[34.6624,135.5027],"長居":[34.6123,135.5244],
+  "parco":[34.6738,135.5010],"big step":[34.6724,135.4988],
+  "清水寺":[34.9947,135.7847],"保津川":[35.0132,135.6068],
+  "難波八阪":[34.6691,135.4984],"梅田藍天":[34.7053,135.4897],
+  "勝尾寺":[34.8658,135.4911],"讀賣電視台":[34.6912,135.5314],
+  "mandarake":[34.6591,135.5057],"lashinbang":[35.0055,135.7666],
+  "大丸心齋橋":[34.6725,135.5008],"pokemon center":[34.6724,135.5008],
+  "道頓堀":[34.6690,135.5013],"固力果":[34.6690,135.5013],
+  "黑門市場":[34.6658,135.5070],"伏見稻荷":[34.9671,135.7727],
+  "嵐山":[35.0169,135.6713],"天神橋筋":[34.7078,135.5114],
+  "通天閣":[34.6525,135.5063],"臨空城":[34.4070,135.2952],
   "首爾":[37.5665,126.9780],"seoul":[37.5665,126.9780],
   "曼谷":[13.7563,100.5018],"bangkok":[13.7563,100.5018]
 };
@@ -718,6 +730,56 @@ class TripManager {
     };
     mSd?.addEventListener('change', updateCalcDays);
     mEd?.addEventListener('change', updateCalcDays);
+
+    // Preset days chips in dateRangeModal
+    document.querySelectorAll('.btn-preset-days').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const days = parseInt(btn.dataset.days, 10);
+        const sVal = mSd?.value || new Date().toISOString().split('T')[0];
+        if (mSd) mSd.value = sVal;
+        const dt = new Date(sVal);
+        dt.setDate(dt.getDate() + (days - 1));
+        if (mEd) mEd.value = dt.toISOString().split('T')[0];
+        updateCalcDays();
+      });
+    });
+
+    // Time Jump Bar in timeline
+    document.getElementById('btnJumpNow')?.addEventListener('click', () => {
+      const nowLine = document.getElementById('currentTimeIndicator');
+      if (nowLine) {
+        nowLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        const now = new Date();
+        const slot = Math.floor((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES);
+        document.getElementById('timelineContainer')?.scrollTo({ top: slot * SLOT_HEIGHT, behavior: 'smooth' });
+      }
+    });
+
+    document.querySelectorAll('.time-jump-bar .jump-chip[data-time]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const [h, m] = chip.dataset.time.split(':').map(Number);
+        const slot = (h * 60 + (m || 0)) / SLOT_MINUTES;
+        document.getElementById('timelineContainer')?.scrollTo({ top: slot * SLOT_HEIGHT, behavior: 'smooth' });
+      });
+    });
+
+    // Quick duration chips in card modal
+    document.querySelectorAll('.duration-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const durMin = parseInt(chip.dataset.min, 10);
+        const ss = document.getElementById('cardStartTime');
+        const se = document.getElementById('cardEndTime');
+        if (ss && se && ss.value) {
+          const [h, m] = ss.value.split(':').map(Number);
+          const totalMin = Math.min(24 * 60, h * 60 + m + durMin);
+          const endH = Math.floor(totalMin / 60);
+          const endM = totalMin % 60;
+          const endTs = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          se.value = endTs;
+        }
+      });
+    });
 
     // View switchers
     const bT = document.getElementById('btnViewTimeline');
@@ -1392,11 +1454,6 @@ class TripManager {
     const dot = document.getElementById('wishlistBadgeDot');
     if (dot) dot.classList.toggle('hidden', this.wishlist.length === 0);
 
-    if (this.wishlist.length === 0) {
-      c.innerHTML = `<div style="text-align:center;padding:32px 16px;color:var(--text-dim);">
-        <p>口袋名單目前是空的</p>
-        <small>在上方輸入景點名稱，或切換到「批次匯入」標籤貼上 Google Maps 清單。</small></div>`;
-      return;
     const q = this.wishlistSearchQuery ? this.wishlistSearchQuery.toLowerCase() : '';
     const filtered = q ? this.wishlist.filter(item => 
       (item.title && item.title.toLowerCase().includes(q)) || 
@@ -1451,6 +1508,14 @@ class TripManager {
     const li = document.getElementById('inputWishlistLoc');
     const title = ni.value.trim(), loc = li.value.trim();
     if (!title) { alert('請輸入地點名稱！'); return; }
+
+    // Check duplicate
+    const isDup = this.wishlist.some(existing => (existing.title || '').trim().toLowerCase() === title.toLowerCase());
+    if (isDup) {
+      this.showToast(`「${title}」已在口袋名單中，已自動忽略！`);
+      return;
+    }
+
     let mapLink = '', location = '';
     if (loc.startsWith('http')) { mapLink = loc; location = title; }
     else { location = loc || title; mapLink = `https://maps.google.com/?q=${encodeURIComponent(location)}`; }
@@ -1681,17 +1746,24 @@ class TripManager {
     badgeElem.textContent = this.parsedImportList.length > 1 ? '地圖清單' : '地點';
 
     this.parsedImportList.forEach((item, idx) => {
+      const isDupInWishlist = this.wishlist.some(existing => 
+        (existing.title || '').trim().toLowerCase() === (item.title || '').trim().toLowerCase() ||
+        (item.mapLink && existing.mapLink && existing.mapLink === item.mapLink)
+      );
+
       const row = document.createElement('div');
       row.className = 'parsed-item-row';
       const noteBadge = item.note ? `<span class="parsed-note-badge">${item.note}</span>` : '';
+      const dupBadge = isDupInWishlist ? `<span class="parsed-note-badge" style="background:rgba(148,163,184,0.18);color:var(--text-muted);border:1px dashed var(--border-subtle);">已在口袋</span>` : '';
       const addrSnippet = item.address ? `<span class="parsed-item-addr" title="${item.address}">📍 ${item.address}</span>` : '';
       const mapLink = item.mapLink ? `<a href="${item.mapLink}" target="_blank" rel="noopener noreferrer" class="btn-parsed-map-link"><i data-lucide="external-link" style="width:12px;height:12px;"></i> 地圖</a>` : '';
 
       row.innerHTML = `
-        <input type="checkbox" class="parsed-item-check" data-idx="${idx}" checked>
+        <input type="checkbox" class="parsed-item-check" data-idx="${idx}" ${isDupInWishlist ? '' : 'checked'}>
         <div class="parsed-item-info">
           <input type="text" class="parsed-item-title-input" value="${item.title}" data-idx="${idx}" title="點擊可修改景點名稱">
           <div class="parsed-item-meta">
+            ${dupBadge}
             ${noteBadge}
             ${addrSnippet}
             ${mapLink}
@@ -1741,10 +1813,26 @@ class TripManager {
     if (checks.length === 0) { alert('請至少勾選一個地點！'); return; }
 
     let addedCount = 0;
+    let skippedCount = 0;
+
     checks.forEach(chk => {
       const idx = parseInt(chk.dataset.idx, 10);
       const item = this.parsedImportList[idx];
       if (item && item.title) {
+        const itemTitleClean = item.title.trim().toLowerCase();
+        // Ignore duplicate in wishlist by title or exact map link
+        const isDuplicate = this.wishlist.some(existing => {
+          const exTitleClean = (existing.title || '').trim().toLowerCase();
+          if (exTitleClean === itemTitleClean) return true;
+          if (item.mapLink && existing.mapLink && existing.mapLink === item.mapLink) return true;
+          return false;
+        });
+
+        if (isDuplicate) {
+          skippedCount++;
+          return;
+        }
+
         this.wishlist.push({
           id: `wish_${Date.now()}_${Math.random().toString(36).substr(2,4)}_${addedCount}`,
           title: item.title,
@@ -1762,7 +1850,13 @@ class TripManager {
     if (ta) ta.value = '';
     this.parsedImportList = [];
     document.getElementById('tabWishlistItems')?.click();
-    this.showToast(`🎉 成功將 ${addedCount} 個地點加入口袋名單！`);
+
+    if (addedCount > 0) {
+      const skipMsg = skippedCount > 0 ? `（已自動忽略 ${skippedCount} 個重複景點）` : '';
+      this.showToast(`🎉 成功將 ${addedCount} 個地點加入口袋名單！${skipMsg}`);
+    } else {
+      this.showToast(`ℹ️ 所選地點已全部在口袋名單中（已忽略 ${skippedCount} 個重複項）`);
+    }
   }
 
   confirmImportToDay() {
@@ -1775,6 +1869,7 @@ class TripManager {
     if (!targetDay) { alert('指定天數不存在！'); return; }
 
     let addedCount = 0;
+    let skippedCount = 0;
     let baseHour = 9;
     let baseMin = 0;
     if (targetDay.cards.length > 0) {
@@ -1790,6 +1885,14 @@ class TripManager {
       const idx = parseInt(chk.dataset.idx, 10);
       const item = this.parsedImportList[idx];
       if (item && item.title) {
+        const itemTitleClean = item.title.trim().toLowerCase();
+        // Ignore duplicate in target day
+        const isDuplicateInDay = targetDay.cards.some(c => (c.title || '').trim().toLowerCase() === itemTitleClean);
+        if (isDuplicateInDay) {
+          skippedCount++;
+          return;
+        }
+
         const startTotalMin = baseHour * 60 + baseMin;
         const endTotalMin = Math.min(24 * 60, startTotalMin + 60); // default 60 mins
         const sH = Math.floor(startTotalMin / 60), sM = startTotalMin % 60;
@@ -1822,7 +1925,13 @@ class TripManager {
     this.saveData();
     this.closeWishlistModal();
     this.renderAll();
-    this.showToast(`🎉 成功將 ${addedCount} 個地點排入 Day ${targetDay.dayNumber}！`);
+
+    if (addedCount > 0) {
+      const skipMsg = skippedCount > 0 ? `（已忽略 ${skippedCount} 個重複景點）` : '';
+      this.showToast(`🎉 成功將 ${addedCount} 個地點排入 Day ${targetDay.dayNumber}！${skipMsg}`);
+    } else {
+      this.showToast(`ℹ️ 所選地點已全部在 Day ${targetDay.dayNumber} 中（已忽略 ${skippedCount} 個重複項）`);
+    }
   }
 
   useWishlistItem(item) {
