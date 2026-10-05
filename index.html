@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>TravelGoGo - 智能直式旅遊行程規劃神器</title>
+  <meta name="description" content="專為手機直式設計的強大旅遊行程規劃工具，支援半小時時段排程、卡片拖曳重疊、Google Maps 嵌入與預覽、交通方式編輯、JSON 本地匯出匯入與離線存取。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
+  
+  <!-- Google Fonts: Outfit & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-main">
+        <div class="app-brand">
+          <span class="brand-icon">✈️</span>
+          <div>
+            <h1 class="app-title" id="tripTitleDisplay" contenteditable="true" spellcheck="false" title="點擊修改行程名稱">東京五天四夜自由行</h1>
+            <p class="app-subtitle" id="tripDatesDisplay">2026/10/10 - 2026/10/14 (5天)</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="btnQuickAdd" class="btn btn-primary" title="快速新增行程卡片">
+            <i data-lucide="plus"></i>
+            <span class="btn-text">新增行程</span>
+          </button>
+          <button id="btnDataMenu" class="btn btn-icon" title="檔案管理 (JSON / 分享)">
+            <i data-lucide="share-2"></i>
+          </button>
+          <button id="btnThemeToggle" class="btn btn-icon" title="切換深色/淺色模式">
+            <i data-lucide="moon" id="themeIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Day Selector Carousel -->
+      <nav class="day-tabs-bar" aria-label="行程天數切換">
+        <div class="day-tabs-scroll" id="dayTabsList">
+          <!-- Dynamically injected day tabs -->
+        </div>
+        <button id="btnAddDay" class="btn-add-day" title="增加一天">
+          <i data-lucide="calendar-plus"></i>
+          <span>加一天</span>
+        </button>
+      </nav>
+
+      <!-- Day Summary Bar -->
+      <div class="day-summary-bar">
+        <div class="day-summary-info">
+          <span class="day-badge" id="currentDayBadge">Day 1</span>
+          <span class="day-date-text" id="currentDayDateText">10月10日 (週六)</span>
+          <span class="card-count" id="currentDayCardCount">0 個景點</span>
+        </div>
+        <div class="view-switchers">
+          <button id="btnViewTimeline" class="btn-view active" title="時間軸直式視圖">
+            <i data-lucide="clock"></i>
+          </button>
+          <button id="btnViewCards" class="btn-view" title="精簡卡片清單">
+            <i data-lucide="layout-list"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-viewport">
+      <!-- Vertical Timeline Mode -->
+      <div id="timelineContainer" class="timeline-container">
+        <!-- 30-min interval ruler and droppable canvas -->
+        <div class="time-ruler" id="timeRuler"></div>
+        <div class="schedule-canvas" id="scheduleCanvas">
+          <!-- Schedule cards placed absolutely based on start & duration -->
+        </div>
+      </div>
+
+      <!-- List Cards Mode (Alternative) -->
+      <div id="cardsListContainer" class="cards-list-container hidden">
+        <div id="cardsList" class="cards-list"></div>
+      </div>
+    </main>
+
+    <!-- Bottom Quick Controls / Floating Bar for Mobile -->
+    <div class="mobile-float-bar">
+      <button class="float-btn" id="btnFloatAdd">
+        <i data-lucide="plus-circle"></i>
+        <span>快速排程</span>
+      </button>
+      <button class="float-btn" id="btnExportJson">
+        <i data-lucide="download"></i>
+        <span>備份 JSON</span>
+      </button>
+      <button class="float-btn" id="btnImportJsonTrigger">
+        <i data-lucide="upload"></i>
+        <span>匯入行程</span>
+      </button>
+      <input type="file" id="fileJsonInput" accept=".json" style="display:none;">
+    </div>
+  </div>
+
+  <!-- Modal: Edit / Add Activity Card -->
+  <div id="cardModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalTitle">編輯行程卡片</h3>
+        <button type="button" class="btn-close" id="btnModalClose">&times;</button>
+      </div>
+      <form id="cardForm" class="modal-body">
+        <input type="hidden" id="editCardId">
+
+        <div class="form-group">
+          <label for="cardTitle">景點 / 活動名稱 *</label>
+          <input type="text" id="cardTitle" required placeholder="例如：晴空塔觀景台、淺草寺雷門、敘敘苑燒肉">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="cardStartTime">開始時間 *</label>
+            <select id="cardStartTime" required></select>
+          </div>
+          <div class="form-group flex-1">
+            <label for="cardEndTime">結束時間 *</label>
+            <select id="cardEndTime" required></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>主題顯目色調</label>
+          <div class="color-palette" id="colorPalette">
+            <!-- Color options rendered by JS -->
+          </div>
+          <input type="hidden" id="cardColor" value="#3b82f6">
+        </div>
+
+        <div class="form-group">
+          <label for="cardLocation">地點名稱或地址</label>
+          <div class="input-with-icon">
+            <i data-lucide="map-pin"></i>
+            <input type="text" id="cardLocation" placeholder="例如：東京都墨田區押上1-1-2">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="cardMapLink">Google Maps 網址或地點連結</label>
+          <div class="input-with-icon">
+            <i data-lucide="navigation"></i>
+            <input type="url" id="cardMapLink" placeholder="https://maps.google.com/?q=...">
+          </div>
+          <small class="form-hint">填寫後可在詳細卡片內嵌地圖、即時導航與預覽。</small>
+        </div>
+
+        <div class="form-group">
+          <label for="cardUrl">參考超連結 (預約憑證、官方網站、食記)</label>
+          <div class="input-with-icon">
+            <i data-lucide="link"></i>
+            <input type="url" id="cardUrl" placeholder="https://...">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="cardTransport">前往此處交通方式 (與上一景點間)</label>
+          <div class="transport-options" id="transportOptions">
+            <button type="button" class="transport-btn" data-type="subway">🚇 地鐵/火車</button>
+            <button type="button" class="transport-btn" data-type="walk">🚶 步行</button>
+            <button type="button" class="transport-btn" data-type="bus">🚌 公車</button>
+            <button type="button" class="transport-btn" data-type="taxi">🚕 計程車</button>
+            <button type="button" class="transport-btn" data-type="car">🚗 自駕/租車</button>
+          </div>
+          <input type="text" id="cardTransportNote" placeholder="例如：搭乘銀座線往淺草方向 (車程 15 分鐘，票價 200円)">
+        </div>
+
+        <div class="form-group">
+          <label for="cardNotes">備忘與備註 (票券預約號、必吃必買重點)</label>
+          <textarea id="cardNotes" rows="3" placeholder="例如：出示電子 QR Code 入場，建議傍晚看夕陽點燈..."></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnDeleteCard" class="btn btn-danger hidden">
+            <i data-lucide="trash-2"></i> 刪除此項
+          </button>
+          <div class="footer-right">
+            <button type="button" id="btnCancelCard" class="btn btn-secondary">取消</button>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="check"></i> 儲存行程
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Card Details & Map Preview -->
+  <div id="detailModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-detail-card">
+      <div class="modal-header" id="detailModalHeader">
+        <div class="detail-header-info">
+          <span class="detail-badge" id="detailTimeBadge">09:00 - 10:30</span>
+          <h3 id="detailTitle">景點標題</h3>
+        </div>
+        <button type="button" class="btn-close" id="btnDetailClose">&times;</button>
+      </div>
+
+      <div class="modal-body detail-body">
+        <!-- Transportation Header if available -->
+        <div id="detailTransportBox" class="detail-transport-box hidden">
+          <span class="transport-tag" id="detailTransportTag">🚇 地鐵</span>
+          <span class="transport-desc" id="detailTransportDesc">交通說明</span>
+        </div>
+
+        <!-- Location & External Links -->
+        <div class="detail-meta-box">
+          <div class="detail-meta-item" id="detailLocationItem">
+            <i data-lucide="map-pin"></i>
+            <span id="detailLocationText">東京都</span>
+            <a id="detailMapOpenBtn" href="#" target="_blank" rel="noopener" class="mini-btn">在 Google Maps 開啟 <i data-lucide="external-link"></i></a>
+          </div>
+          <div class="detail-meta-item hidden" id="detailLinkItem">
+            <i data-lucide="globe"></i>
+            <a id="detailExternalLink" href="#" target="_blank" rel="noopener">相關參考網址</a>
+          </div>
+        </div>
+
+        <!-- Embedded Map or Interactive Preview -->
+        <div class="map-embed-wrapper" id="detailMapWrapper">
+          <iframe id="mapFrame" title="Google 地圖預覽" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+          <div id="mapFallback" class="map-fallback hidden">
+            <i data-lucide="map"></i>
+            <p>尚未提供具體地址或地圖網址</p>
+          </div>
+        </div>
+
+        <!-- Notes Section -->
+        <div class="detail-notes-box">
+          <h4><i data-lucide="file-text"></i> 備忘與備註</h4>
+          <p id="detailNotesText" class="notes-content">尚無備註</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnDetailEdit" class="btn btn-primary">
+          <i data-lucide="edit-3"></i> 編輯此卡片
+        </button>
+        <button type="button" id="btnDetailDelete" class="btn btn-danger">
+          <i data-lucide="trash-2"></i> 刪除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Data & Export / Import Management -->
+  <div id="dataModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="folder-cog"></i> 行程資料備份與分享</h3>
+        <button type="button" class="btn-close" id="btnDataModalClose">&times;</button>
+      </div>
+      <div class="modal-body data-modal-body">
+        <p class="data-intro">所有行程資料皆即時儲存在您本地瀏覽器 (LocalStorage)，無須註冊。您可以隨時匯出 JSON 檔案分享給旅伴，或在不同裝置間同步。</p>
+
+        <div class="action-grid">
+          <div class="action-card" id="cardDownloadJson">
+            <div class="action-icon"><i data-lucide="download"></i></div>
+            <h4>下載 JSON 備份檔</h4>
+            <p>儲存目前的完整行程，包含所有天數、地點與交通備忘。</p>
+            <button class="btn btn-primary full-width" id="btnActionDownload">下載 .json 檔</button>
+          </div>
+
+          <div class="action-card" id="cardUploadJson">
+            <div class="action-icon"><i data-lucide="upload"></i></div>
+            <h4>匯入行程 JSON</h4>
+            <p>載入朋友分享的 JSON 或先前的備份檔案。</p>
+            <button class="btn btn-secondary full-width" id="btnActionUpload">選擇檔案匯入</button>
+          </div>
+
+          <div class="action-card" id="cardShareLink">
+            <div class="action-icon"><i data-lucide="share-2"></i></div>
+            <h4>複製行程分享代碼</h4>
+            <p>將目前行程壓縮成字串直接複製，方便透過 LINE 或通訊軟體傳送。</p>
+            <button class="btn btn-secondary full-width" id="btnActionCopyCode">複製代碼</button>
+          </div>
+
+          <div class="action-card danger-card">
+            <div class="action-icon"><i data-lucide="rotate-ccw"></i></div>
+            <h4>重設 / 載入示範範本</h4>
+            <p>清除目前資料並重新載入「東京經典 5 天 4 夜」示範行程。</p>
+            <button class="btn btn-danger full-width" id="btnActionResetDemo">載入示範行程</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toastNotification" class="toast hidden"></div>
+
+  <!-- App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
