@@ -317,6 +317,7 @@ class TripManager {
           <div class="card-badges">
             ${card.mapLink ? `<span class="badge-icon-btn" title="有 Google 地圖定位"><i data-lucide="map-pin" style="width:13px;height:13px;"></i></span>` : ''}
             ${card.url ? `<span class="badge-icon-btn" title="有外鏈網站"><i data-lucide="link" style="width:13px;height:13px;"></i></span>` : ''}
+            <span class="card-drag-handle" title="按住拖曳調整 30 分鐘時段"><i data-lucide="grip-vertical" style="width:14px;height:14px;"></i></span>
           </div>
         </div>
         <div class="card-bottom">
@@ -405,26 +406,58 @@ class TripManager {
     let startY = 0;
     let initialTop = 0;
     let hasMoved = false;
+    let scrollInterval = null;
+    const viewport = document.querySelector('.main-viewport');
+
+    const handle = element.querySelector('.card-drag-handle');
+    if (!handle) return;
 
     const onPointerDown = (e) => {
-      if (e.target.closest('.badge-icon-btn')) return;
-      
+      // ONLY allow drag if initiated from the drag handle icon
+      if (!e.target.closest('.card-drag-handle')) return;
+      e.stopPropagation();
+
       startY = e.clientY || (e.touches && e.touches[0].clientY);
       initialTop = parseFloat(element.style.top) || 0;
       hasMoved = false;
 
+      const checkEdgeAutoScroll = (currentClientY) => {
+        if (!viewport) return;
+        const rect = viewport.getBoundingClientRect();
+        const topThreshold = rect.top + 60;
+        const bottomThreshold = rect.bottom - 60;
+
+        clearInterval(scrollInterval);
+        scrollInterval = null;
+
+        if (currentClientY < topThreshold) {
+          // Near top boundary: auto scroll up
+          scrollInterval = setInterval(() => {
+            viewport.scrollTop -= 14;
+          }, 30);
+        } else if (currentClientY > bottomThreshold) {
+          // Near bottom boundary: auto scroll down
+          scrollInterval = setInterval(() => {
+            viewport.scrollTop += 14;
+          }, 30);
+        }
+      };
+
       const onPointerMove = (moveEvent) => {
         const currentY = moveEvent.clientY || (moveEvent.touches && moveEvent.touches[0].clientY);
         const deltaY = currentY - startY;
+
         if (Math.abs(deltaY) > 8) {
           hasMoved = true;
           element.classList.add('is-dragging');
         }
 
         if (hasMoved) {
+          if (moveEvent.cancelable) moveEvent.preventDefault(); // Prevent native page scroll while dragging handle
           let newTop = initialTop + deltaY;
           newTop = Math.max(0, Math.min(35 * 48, newTop));
           element.style.top = `${newTop}px`;
+          checkEdgeAutoScroll(currentY);
         }
       };
 
@@ -433,6 +466,8 @@ class TripManager {
         window.removeEventListener('mouseup', onPointerUp);
         window.removeEventListener('touchmove', onPointerMove);
         window.removeEventListener('touchend', onPointerUp);
+        clearInterval(scrollInterval);
+        scrollInterval = null;
 
         if (hasMoved) {
           element.classList.remove('is-dragging');
@@ -441,12 +476,25 @@ class TripManager {
           const newStartTime = this.slotToTime(newSlot);
           const newEndTime = this.slotToTime(newSlot + durationSlots);
 
-          card.startTime = newStartTime;
-          card.endTime = newEndTime;
-          this.saveData();
-          this.renderSchedule();
-          this.renderCardsList();
-          this.showToast(`已移動「${card.title}」至 ${newStartTime}`);
+          // If time didn't change
+          if (newStartTime === card.startTime) {
+            element.style.top = `${initialTop}px`;
+            return;
+          }
+
+          // Trigger confirmation dialog before applying change!
+          const confirmMsg = `確定要將「${card.title}」的時間調整為：\n🕒 ${newStartTime} - ${newEndTime} 嗎？`;
+          if (confirm(confirmMsg)) {
+            card.startTime = newStartTime;
+            card.endTime = newEndTime;
+            this.saveData();
+            this.renderSchedule();
+            this.renderCardsList();
+            this.showToast(`已移動「${card.title}」至 ${newStartTime}`);
+          } else {
+            // Cancelled: revert card position back to original slot
+            element.style.top = `${initialTop}px`;
+          }
         }
       };
 
@@ -456,8 +504,8 @@ class TripManager {
       window.addEventListener('touchend', onPointerUp);
     };
 
-    element.addEventListener('mousedown', onPointerDown);
-    element.addEventListener('touchstart', onPointerDown, { passive: true });
+    handle.addEventListener('mousedown', onPointerDown);
+    handle.addEventListener('touchstart', onPointerDown, { passive: false });
   }
 
   renderCardsList() {
@@ -752,6 +800,28 @@ class TripManager {
       this.showToast('已刪除行程卡片');
     });
 
+    // Copy card to another day
+    const btnCopyDay = document.getElementById('btnDetailCopyDay');
+    if (btnCopyDay) {
+      btnCopyDay.addEventListener('click', () => {
+        const cardId = document.getElementById('detailModal').dataset.activeCardId;
+        const currentDay = this.getCurrentDay();
+        const card = currentDay.cards.find(c => c.id === cardId);
+        if (card) this.handleCopyCardToDay(card);
+      });
+    }
+
+    // Move card to another day
+    const btnMoveDay = document.getElementById('btnDetailMoveDay');
+    if (btnMoveDay) {
+      btnMoveDay.addEventListener('click', () => {
+        const cardId = document.getElementById('detailModal').dataset.activeCardId;
+        const currentDay = this.getCurrentDay();
+        const card = currentDay.cards.find(c => c.id === cardId);
+        if (card) this.handleMoveCardToDay(card);
+      });
+    }
+
     // Transport buttons in form
     document.querySelectorAll('.transport-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -863,10 +933,22 @@ class TripManager {
     });
   }
 
+  populateDayDropdown(selectedDayIndex) {
+    const daySelect = document.getElementById('cardTargetDay');
+    if (!daySelect) return;
+    daySelect.innerHTML = '';
+    this.data.days.forEach((day, index) => {
+      const opt = new Option(`Day ${day.dayNumber} (${day.date.slice(5)})`, index);
+      if (index === selectedDayIndex) opt.selected = true;
+      daySelect.appendChild(opt);
+    });
+  }
+
   openAddModal() {
     document.getElementById('modalTitle').textContent = '新增行程卡片';
     document.getElementById('editCardId').value = '';
     document.getElementById('cardTitle').value = '';
+    this.populateDayDropdown(this.data.currentDayIndex);
     document.getElementById('cardStartTime').value = '10:00';
     document.getElementById('cardEndTime').value = '11:30';
     document.getElementById('cardLocation').value = '';
@@ -887,6 +969,7 @@ class TripManager {
     document.getElementById('modalTitle').textContent = '編輯行程卡片';
     document.getElementById('editCardId').value = card.id;
     document.getElementById('cardTitle').value = card.title || '';
+    this.populateDayDropdown(this.data.currentDayIndex);
     document.getElementById('cardStartTime').value = card.startTime || '10:00';
     document.getElementById('cardEndTime').value = card.endTime || '11:30';
     document.getElementById('cardLocation').value = card.location || '';
@@ -918,6 +1001,7 @@ class TripManager {
     e.preventDefault();
     const id = document.getElementById('editCardId').value;
     const title = document.getElementById('cardTitle').value.trim();
+    const targetDayIndex = parseInt(document.getElementById('cardTargetDay').value, 10);
     const startTime = document.getElementById('cardStartTime').value;
     const endTime = document.getElementById('cardEndTime').value;
     const location = document.getElementById('cardLocation').value.trim();
@@ -932,14 +1016,32 @@ class TripManager {
     }
 
     const currentDay = this.getCurrentDay();
+    const targetDay = this.data.days[targetDayIndex] || currentDay;
 
     if (id) {
-      const card = currentDay.cards.find(c => c.id === id);
-      if (card) {
-        Object.assign(card, {
+      // Find card across all days (in case day was changed in dropdown)
+      let foundCard = null;
+      let originalDayIndex = -1;
+      this.data.days.forEach((d, dIdx) => {
+        const c = d.cards.find(item => item.id === id);
+        if (c) {
+          foundCard = c;
+          originalDayIndex = dIdx;
+        }
+      });
+
+      if (foundCard) {
+        Object.assign(foundCard, {
           title, startTime, endTime, color, location, mapLink, url,
           transportType: this.selectedTransportType, transportNote, notes
         });
+
+        // If user changed the day in dropdown, move to target day
+        if (originalDayIndex !== targetDayIndex) {
+          this.data.days[originalDayIndex].cards = this.data.days[originalDayIndex].cards.filter(c => c.id !== id);
+          targetDay.cards.push(foundCard);
+          this.data.currentDayIndex = targetDayIndex;
+        }
       }
     } else {
       const newCard = {
@@ -947,13 +1049,64 @@ class TripManager {
         title, startTime, endTime, color, location, mapLink, url,
         transportType: this.selectedTransportType, transportNote, notes
       };
-      currentDay.cards.push(newCard);
+      targetDay.cards.push(newCard);
+      this.data.currentDayIndex = targetDayIndex;
     }
 
     this.saveData();
     this.closeCardModal();
     this.renderAll();
     this.showToast('行程已成功儲存！');
+  }
+
+  handleCopyCardToDay(card) {
+    const daysList = this.data.days.map((d, i) => `${i + 1}: Day ${d.dayNumber} (${d.date})`).join('\n');
+    const input = prompt(`請輸入要【複製】到的天數編號 (1 ~ ${this.data.days.length})：\n${daysList}`, String(this.data.currentDayIndex + 1));
+    if (!input) return;
+
+    const targetDayIndex = parseInt(input.trim(), 10) - 1;
+    if (isNaN(targetDayIndex) || targetDayIndex < 0 || targetDayIndex >= this.data.days.length) {
+      alert('請輸入有效的天數編號！');
+      return;
+    }
+
+    const copiedCard = JSON.parse(JSON.stringify(card));
+    copiedCard.id = `card_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    this.data.days[targetDayIndex].cards.push(copiedCard);
+    this.saveData();
+    this.closeDetailModal();
+    this.data.currentDayIndex = targetDayIndex;
+    this.renderAll();
+    this.showToast(`已複製「${card.title}」至 Day ${targetDayIndex + 1}！`);
+  }
+
+  handleMoveCardToDay(card) {
+    const daysList = this.data.days.map((d, i) => `${i + 1}: Day ${d.dayNumber} (${d.date})`).join('\n');
+    const input = prompt(`請輸入要【搬移】到的天數編號 (1 ~ ${this.data.days.length})：\n${daysList}`, String(this.data.currentDayIndex + 1));
+    if (!input) return;
+
+    const targetDayIndex = parseInt(input.trim(), 10) - 1;
+    if (isNaN(targetDayIndex) || targetDayIndex < 0 || targetDayIndex >= this.data.days.length) {
+      alert('請輸入有效的天數編號！');
+      return;
+    }
+
+    if (targetDayIndex === this.data.currentDayIndex) {
+      alert('此行程已在當天！');
+      return;
+    }
+
+    // Remove from current day
+    const currentDay = this.getCurrentDay();
+    currentDay.cards = currentDay.cards.filter(c => c.id !== card.id);
+
+    // Append to target day
+    this.data.days[targetDayIndex].cards.push(card);
+    this.saveData();
+    this.closeDetailModal();
+    this.data.currentDayIndex = targetDayIndex;
+    this.renderAll();
+    this.showToast(`已將「${card.title}」搬移至 Day ${targetDayIndex + 1}！`);
   }
 
   handleDeleteCard() {

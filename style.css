@@ -421,7 +421,8 @@ body {
   border: 1px solid var(--border-subtle);
   border-left: 6px solid var(--accent-primary);
   box-shadow: var(--shadow-md);
-  cursor: grab;
+  cursor: pointer;
+  touch-action: pan-y; /* Allow normal vertical scrolling unless dragging handle */
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   display: flex;
   flex-direction: column;
@@ -436,15 +437,33 @@ body {
   z-index: 20;
 }
 
-.activity-card:active {
+.card-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none; /* Crucial: prevent browser scrolling when touching drag handle */
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.card-drag-handle:hover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+.card-drag-handle:active {
   cursor: grabbing;
 }
 
 .activity-card.is-dragging {
-  opacity: 0.7;
-  transform: scale(0.98);
-  box-shadow: var(--shadow-lg);
+  opacity: 0.8;
+  transform: scale(0.99);
+  box-shadow: var(--shadow-lg), 0 0 15px rgba(56, 189, 248, 0.5);
   z-index: 50;
+  pointer-events: none;
 }
 
 /* Overlapping multi-card layout styles (e.g. side-by-side or layered columns) */
@@ -840,6 +859,25 @@ textarea:focus {
   justify-content: space-between;
   gap: 12px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.modal-footer-wrap {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.footer-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.footer-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .footer-right {

@@ -169,6 +169,10 @@
 
         <div class="form-row">
           <div class="form-group flex-1">
+            <label for="cardTargetDay">安排天數 *</label>
+            <select id="cardTargetDay" required></select>
+          </div>
+          <div class="form-group flex-1">
             <label for="cardStartTime">開始時間 *</label>
             <select id="cardStartTime" required></select>
           </div>
@@ -290,13 +294,23 @@
         </div>
       </div>
 
-      <div class="modal-footer">
-        <button type="button" id="btnDetailEdit" class="btn btn-primary">
-          <i data-lucide="edit-3"></i> 編輯此卡片
-        </button>
-        <button type="button" id="btnDetailDelete" class="btn btn-danger">
-          <i data-lucide="trash-2"></i> 刪除
-        </button>
+      <div class="modal-footer modal-footer-wrap">
+        <div class="footer-left-actions">
+          <button type="button" id="btnDetailCopyDay" class="btn btn-secondary btn-sm" title="複製此卡片到指定天數">
+            <i data-lucide="copy"></i> 複製到其他天
+          </button>
+          <button type="button" id="btnDetailMoveDay" class="btn btn-secondary btn-sm" title="直接搬移此卡片至其他天">
+            <i data-lucide="calendar"></i> 搬移到其他天
+          </button>
+        </div>
+        <div class="footer-right-actions">
+          <button type="button" id="btnDetailEdit" class="btn btn-primary">
+            <i data-lucide="edit-3"></i> 編輯
+          </button>
+          <button type="button" id="btnDetailDelete" class="btn btn-danger">
+            <i data-lucide="trash-2"></i> 刪除
+          </button>
+        </div>
       </div>
     </div>
   </div>
