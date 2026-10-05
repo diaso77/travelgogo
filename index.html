@@ -61,9 +61,9 @@
         <div class="day-tabs-scroll" id="dayTabsList">
           <!-- Dynamically injected day tabs -->
         </div>
-        <button id="btnAddDay" class="btn-add-day" title="增加一天">
-          <i data-lucide="calendar-plus"></i>
-          <span>加一天</span>
+        <button id="btnOpenDateRange" class="btn-date-range-badge" title="從月曆選取開始與結束日期建立天數">
+          <i data-lucide="calendar-range"></i>
+          <span id="barDateRangeText">設定旅遊區間</span>
         </button>
       </nav>
 
@@ -449,6 +449,39 @@
     </div>
   </div>
 
+  <!-- Modal: Date Range Picker (從月曆選取開始與結束日期建立天數) -->
+  <div id="dateRangeModal" class="modal-backdrop hidden">
+    <div class="modal-card" style="max-width:420px;">
+      <div class="modal-header">
+        <h3><i data-lucide="calendar-range"></i> 設定旅遊日期區間</h3>
+        <button type="button" class="btn-close" id="btnDateRangeModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.84rem;color:var(--text-muted);line-height:1.5;">
+          從月曆選擇<strong>開始日期</strong>與<strong>結束日期</strong>，系統將自動依區間建立對應天數與日期標籤（原有排程卡片將依日期保留）：
+        </p>
+        <div class="form-row" style="margin-top:10px;">
+          <div class="form-group flex-1">
+            <label for="modalStartDate">🛫 開始日期</label>
+            <input type="date" id="modalStartDate" class="form-control">
+          </div>
+          <div class="form-group flex-1">
+            <label for="modalEndDate">🛬 結束日期</label>
+            <input type="date" id="modalEndDate" class="form-control">
+          </div>
+        </div>
+        <div class="date-calc-box" style="margin:12px 0;padding:12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-subtle);text-align:center;">
+          <span style="font-size:0.85rem;color:var(--text-muted);">預計建立：</span>
+          <strong id="calcDaysCount" style="color:var(--accent-primary);font-size:1.2rem;font-weight:800;">1</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);"> 天行程</span>
+        </div>
+        <button type="button" class="btn btn-primary full-width" id="btnConfirmDateRange">
+          <i data-lucide="check"></i> 確定建立天數
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Pocket / Wishlist Places (預備景點庫) -->
   <div id="wishlistModal" class="modal-backdrop hidden">
     <div class="modal-card modal-wishlist-card">
@@ -470,6 +503,12 @@
 
         <!-- Panel 1: List of Wishlist items -->
         <div id="panelWishlistItems" class="wishlist-panel">
+          <!-- Search & Filter -->
+          <div class="wishlist-filter-bar">
+            <input type="text" id="inputSearchWishlist" class="wishlist-search-input" placeholder="🔍 搜尋口袋景點名稱或備註...">
+            <button type="button" id="btnClearAllWishlist" class="btn-text-danger" title="清空全部口袋景點">清空</button>
+          </div>
+
           <!-- Quick add single spot to wishlist -->
           <div class="wishlist-add-box">
             <input type="text" id="inputWishlistName" placeholder="快速新增想去的地點名稱...">
@@ -487,24 +526,73 @@
         <!-- Panel 2: Batch import from Google Maps / Text list / CSV -->
         <div id="panelWishlistImport" class="wishlist-panel hidden">
           <div class="import-instruction-box">
-            <h4>💡 如何從 Google Maps 匯入？</h4>
-            <p>1. 在 Google Maps 手機 App 或網頁版打開您儲存的「想去的地點」清單或分享連結。<br>
-               2. 直接複製文字、多行地點清單，或貼上 Google Maps 地點連結。<br>
-               3. 貼到下方文字框，TravelGoGo 會自動解析名稱與網址，批次存入口袋庫！</p>
+            <h4>💡 Google Maps 地圖清單與地點智慧解析</h4>
+            <p>支援解析 Google 地圖<strong>清單分享連結</strong>（包含多個儲存地點）、<strong>單一地點短網址</strong>、或貼上多行景點文字：</p>
+            <div class="quick-sample-chips">
+              <button type="button" class="sample-chip" id="btnSampleList" title="點擊載入大阪行地圖清單測試">📋 測試地圖清單 (大阪行 27點)</button>
+              <button type="button" class="sample-chip" id="btnSampleSingle" title="點擊載入南機場夜市短網址測試">📍 測試地點 (南機場夜市)</button>
+            </div>
           </div>
 
           <div class="form-group">
-            <label for="textareaGoogleMapsImport">貼上 Google 地圖分享文字或多行地點清單：</label>
-            <textarea id="textareaGoogleMapsImport" rows="6" placeholder="例如：
-晴空塔 https://maps.app.goo.gl/xxx
-雷門 淺草寺
-敘敘苑 燒肉 新宿中央東口
-SHIBUYA SKY 展望台"></textarea>
+            <label for="textareaGoogleMapsImport">貼上 Google 地圖清單網址、地點連結或景點清單：</label>
+            <textarea id="textareaGoogleMapsImport" rows="4" placeholder="例如：
+https://maps.app.goo.gl/5NP9kDmu6kwjoHw59?g_st=ac
+或
+https://maps.app.goo.gl/Ca41BUVioqxn3pd26
+或貼上多行景點名稱與備註..."></textarea>
           </div>
 
-          <button type="button" id="btnRunBatchImport" class="btn btn-primary full-width">
-            <i data-lucide="download-cloud"></i> 開始解析並批次匯入
-          </button>
+          <div class="import-action-row">
+            <button type="button" id="btnRunBatchImport" class="btn btn-primary">
+              <i data-lucide="sparkles"></i>
+              <span id="btnRunBatchText">開始智慧解析</span>
+            </button>
+            <button type="button" id="btnClearImportText" class="btn btn-icon" title="清空文字框">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+          </div>
+
+          <!-- Loading Indicator -->
+          <div id="parseLoadingIndicator" class="parse-loading-box hidden">
+            <div class="spinner"></div>
+            <span>正在解析 Google 地圖連結與清單內容，請稍候...</span>
+          </div>
+
+          <!-- Parsed Result Preview Container -->
+          <div id="parsedPreviewContainer" class="parsed-preview-container hidden">
+            <div class="parsed-preview-header">
+              <div class="parsed-title-info">
+                <span class="parsed-badge" id="parsedListBadge">地圖清單</span>
+                <strong id="parsedListName">大阪行</strong>
+                <span class="parsed-count-pill" id="parsedCountPill">共 27 個地點</span>
+              </div>
+              <div class="parsed-header-tools">
+                <label class="select-all-label">
+                  <input type="checkbox" id="checkSelectAllParsed" checked> 全選
+                </label>
+              </div>
+            </div>
+
+            <!-- Scrollable preview items -->
+            <div id="parsedItemsList" class="parsed-items-list">
+              <!-- Dynamically injected parsed items with checkboxes -->
+            </div>
+
+            <!-- Batch Import Actions -->
+            <div class="parsed-import-actions">
+              <button type="button" id="btnConfirmBatchWishlist" class="btn btn-primary full-width">
+                <i data-lucide="bookmark-check"></i> 確認匯入至口袋清單 (<span id="btnImportCount">0</span>)
+              </button>
+              <div class="parsed-add-to-day-row">
+                <span>或直接排入：</span>
+                <select id="selectParsedTargetDay" class="form-control select-day-inline"></select>
+                <button type="button" id="btnConfirmBatchToDay" class="btn btn-secondary btn-sm">
+                  <i data-lucide="calendar-plus"></i> 排入該天
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

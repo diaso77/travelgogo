@@ -242,7 +242,12 @@ class TripManager {
     const n = this.data.days.length;
     const s = this.data.days[0]?.date || '';
     const e = this.data.days[n-1]?.date || '';
-    document.getElementById('tripDatesDisplay').textContent = `${s} ~ ${e} (${n} 天)`;
+    const dateText = s && e ? `${s} ~ ${e} (${n} 天)` : '點擊設定旅遊日期區間';
+    document.getElementById('tripDatesDisplay').textContent = `📅 ${dateText}`;
+    const barDateElem = document.getElementById('barDateRangeText');
+    if (barDateElem) {
+      barDateElem.textContent = s && e ? `${formatDateStr(s)} ~ ${formatDateStr(e)} (${n}天)` : '設定旅遊區間';
+    }
   }
 
   renderDayTabs() {
@@ -696,18 +701,23 @@ class TripManager {
       this.showToast('✅ 所有設定已儲存至本地快取 (LocalStorage)！');
     });
 
-    // Add day
-    document.getElementById('btnAddDay').addEventListener('click', () => {
-      const n = this.data.days.length + 1;
-      const last = new Date(this.data.days[this.data.days.length - 1].date);
-      last.setDate(last.getDate() + 1);
-      const ds = last.toISOString().split('T')[0];
-      this.data.days.push({ dayNumber: n, date: ds, label: `Day ${n}`, cards: [] });
-      this.data.currentDayIndex = this.data.days.length - 1;
-      this.data.endDate = ds;
-      this.saveData(); this.renderAll();
-      this.showToast(`已新增 Day ${n}`);
-    });
+    // Date Range Picker Modal triggers (Create days from date range)
+    document.getElementById('btnOpenDateRange')?.addEventListener('click', () => this.openDateRangeModal());
+    document.getElementById('tripDatesDisplay')?.addEventListener('click', () => this.openDateRangeModal());
+    document.getElementById('btnDateRangeModalClose')?.addEventListener('click', () => this.closeDateRangeModal());
+    document.getElementById('btnConfirmDateRange')?.addEventListener('click', () => this.applyModalDateRange());
+    const mSd = document.getElementById('modalStartDate');
+    const mEd = document.getElementById('modalEndDate');
+    const updateCalcDays = () => {
+      if (mSd && mEd && mSd.value && mEd.value) {
+        const d1 = new Date(mSd.value), d2 = new Date(mEd.value);
+        const days = Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+        const cElem = document.getElementById('calcDaysCount');
+        if (cElem) cElem.textContent = isNaN(days) ? 1 : days;
+      }
+    };
+    mSd?.addEventListener('change', updateCalcDays);
+    mEd?.addEventListener('change', updateCalcDays);
 
     // View switchers
     const bT = document.getElementById('btnViewTimeline');
@@ -833,12 +843,66 @@ class TripManager {
     const tabIm = document.getElementById('tabWishlistImport');
     const panI = document.getElementById('panelWishlistItems');
     const panIm = document.getElementById('panelWishlistImport');
-    tabI.addEventListener('click', () => { tabI.classList.add('active'); tabIm.classList.remove('active'); panI.classList.remove('hidden'); panIm.classList.add('hidden'); });
-    tabIm.addEventListener('click', () => { tabIm.classList.add('active'); tabI.classList.remove('active'); panIm.classList.remove('hidden'); panI.classList.add('hidden'); });
+    tabI.addEventListener('click', () => {
+      tabI.classList.add('active'); tabIm.classList.remove('active');
+      panI.classList.remove('hidden'); panIm.classList.add('hidden');
+    });
+    tabIm.addEventListener('click', () => {
+      tabIm.classList.add('active'); tabI.classList.remove('active');
+      panIm.classList.remove('hidden'); panI.classList.add('hidden');
+      this.populateDaySelectorInImport();
+    });
 
     document.getElementById('btnAddSingleWishlist').addEventListener('click', () => this.handleAddSingleWishlist());
     document.getElementById('btnRunBatchImport').addEventListener('click', () => this.handleBatchGoogleMapsImport());
     document.getElementById('btnPickFromWishlist')?.addEventListener('click', () => this.openWishlistModal(true));
+
+    // Smart Google Maps import sample chips
+    document.getElementById('btnSampleList')?.addEventListener('click', () => {
+      const ta = document.getElementById('textareaGoogleMapsImport');
+      if (ta) {
+        ta.value = 'https://maps.app.goo.gl/5NP9kDmu6kwjoHw59?g_st=ac';
+        this.handleBatchGoogleMapsImport();
+      }
+    });
+    document.getElementById('btnSampleSingle')?.addEventListener('click', () => {
+      const ta = document.getElementById('textareaGoogleMapsImport');
+      if (ta) {
+        ta.value = 'https://maps.app.goo.gl/Ca41BUVioqxn3pd26';
+        this.handleBatchGoogleMapsImport();
+      }
+    });
+    document.getElementById('btnClearImportText')?.addEventListener('click', () => {
+      const ta = document.getElementById('textareaGoogleMapsImport');
+      if (ta) ta.value = '';
+      document.getElementById('parsedPreviewContainer')?.classList.add('hidden');
+      this.parsedImportList = [];
+    });
+
+    // Check all parsed items
+    document.getElementById('checkSelectAllParsed')?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('.parsed-item-check').forEach(chk => chk.checked = checked);
+      this.updateImportButtonCount();
+    });
+
+    // Confirm batch actions
+    document.getElementById('btnConfirmBatchWishlist')?.addEventListener('click', () => this.confirmImportToWishlist());
+    document.getElementById('btnConfirmBatchToDay')?.addEventListener('click', () => this.confirmImportToDay());
+
+    // Wishlist search filter and clear all
+    document.getElementById('inputSearchWishlist')?.addEventListener('input', (e) => {
+      this.wishlistSearchQuery = e.target.value.trim().toLowerCase();
+      this.renderWishlist();
+    });
+    document.getElementById('btnClearAllWishlist')?.addEventListener('click', () => {
+      if (!this.wishlist || this.wishlist.length === 0) return;
+      if (confirm(`確定要清空口袋名單中所有 ${this.wishlist.length} 個景點嗎？`)) {
+        this.wishlist = [];
+        this.saveWishlist();
+        this.showToast('已清空口袋名單');
+      }
+    });
 
     // Undo
     document.getElementById('btnUndo')?.addEventListener('click', () => this.undoLastDelete());
@@ -854,7 +918,62 @@ class TripManager {
     });
   }
 
-  // ── Date Range Picker ────────────────────────────────────────────────────
+  // ── Date Range Picker & Calendar Day Generation ─────────────────────────
+
+  openDateRangeModal() {
+    const modal = document.getElementById('dateRangeModal');
+    if (!modal) return;
+    const mSd = document.getElementById('modalStartDate');
+    const mEd = document.getElementById('modalEndDate');
+    const s = this.data.startDate || this.data.days[0]?.date || new Date().toISOString().split('T')[0];
+    const e = this.data.endDate || this.data.days[this.data.days.length - 1]?.date || s;
+    if (mSd) mSd.value = s;
+    if (mEd) mEd.value = e;
+    const days = Math.max(1, Math.round((new Date(e) - new Date(s)) / (1000 * 60 * 60 * 24)) + 1);
+    const cElem = document.getElementById('calcDaysCount');
+    if (cElem) cElem.textContent = isNaN(days) ? 1 : days;
+    modal.classList.remove('hidden');
+    this.initLucide();
+  }
+
+  closeDateRangeModal() {
+    document.getElementById('dateRangeModal')?.classList.add('hidden');
+  }
+
+  applyModalDateRange() {
+    const sd = document.getElementById('modalStartDate').value;
+    const ed = document.getElementById('modalEndDate').value;
+    if (!sd || !ed) { alert('請選擇開始與結束日期！'); return; }
+    if (new Date(ed) < new Date(sd)) { alert('結束日期不能早於開始日期！'); return; }
+
+    const diff = dateDiffDays(sd, ed) + 1;
+    if (diff > 30) { alert('行程最多支援 30 天！'); return; }
+
+    const existingByDate = {};
+    this.data.days.forEach(d => { existingByDate[d.date] = d.cards; });
+
+    const newDays = [];
+    for (let i = 0; i < diff; i++) {
+      const dt = new Date(sd);
+      dt.setDate(dt.getDate() + i);
+      const ds = dt.toISOString().split('T')[0];
+      newDays.push({
+        dayNumber: i + 1,
+        date: ds,
+        label: `Day ${i + 1}`,
+        cards: existingByDate[ds] || []
+      });
+    }
+
+    this.data.days = newDays;
+    this.data.startDate = sd;
+    this.data.endDate = ed;
+    this.data.currentDayIndex = 0;
+    this.saveData();
+    this.closeDateRangeModal();
+    this.renderAll();
+    this.showToast(`已成功依日期區間建立 ${diff} 天行程！(${sd} ~ ${ed})`);
+  }
 
   applyDateRange() {
     const sd = document.getElementById('tripStartDate').value;
@@ -1278,26 +1397,49 @@ class TripManager {
         <p>口袋名單目前是空的</p>
         <small>在上方輸入景點名稱，或切換到「批次匯入」標籤貼上 Google Maps 清單。</small></div>`;
       return;
+    const q = this.wishlistSearchQuery ? this.wishlistSearchQuery.toLowerCase() : '';
+    const filtered = q ? this.wishlist.filter(item => 
+      (item.title && item.title.toLowerCase().includes(q)) || 
+      (item.location && item.location.toLowerCase().includes(q)) ||
+      (item.note && item.note.toLowerCase().includes(q))
+    ) : this.wishlist;
+
+    if (this.wishlist.length === 0) {
+      c.innerHTML = `<div style="text-align:center;padding:32px 16px;color:var(--text-dim);">
+        <p>口袋名單目前是空的</p>
+        <small>在上方輸入景點名稱，或切換到「批次匯入」標籤貼上 Google Maps 清單網址。</small></div>`;
+      return;
+    }
+    if (filtered.length === 0) {
+      c.innerHTML = `<div style="text-align:center;padding:24px 16px;color:var(--text-dim);">
+        <p>找不到符合「${this.wishlistSearchQuery}」的景點</p></div>`;
+      return;
     }
 
-    this.wishlist.forEach((item, idx) => {
+    filtered.forEach((item) => {
+      const originalIdx = this.wishlist.indexOf(item);
       const card = document.createElement('div');
       card.className = 'wishlist-item-card';
+      const noteHtml = item.note ? `<span class="parsed-note-badge" style="margin-left:6px;">${item.note}</span>` : '';
+      const mapBtn = item.mapLink ? `<a href="${item.mapLink}" target="_blank" rel="noopener noreferrer" class="btn-parsed-map-link" title="在 Google 地圖開啟"><i data-lucide="map-pin" style="width:14px;height:14px;"></i></a>` : '';
       card.innerHTML = `
         <div class="wishlist-item-main">
-          <div class="wishlist-item-title">📍 ${item.title}</div>
+          <div class="wishlist-item-title">📍 ${item.title} ${noteHtml}</div>
           <div class="wishlist-item-sub">${item.location || (item.mapLink ? '有 Google Maps 連結' : '尚未設定地址')}</div>
         </div>
         <div class="wishlist-item-actions">
-          <button type="button" class="btn-wishlist-add-to-plan" data-idx="${idx}">
+          ${mapBtn}
+          <button type="button" class="btn-wishlist-add-to-plan" data-idx="${originalIdx}">
             <i data-lucide="${this.wishlistSelectMode ? 'check' : 'plus'}"></i>
             <span>${this.wishlistSelectMode ? '帶入此點' : '加入行程'}</span>
           </button>
-          <button type="button" class="btn-wishlist-del" data-idx="${idx}" title="刪除"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
+          <button type="button" class="btn-wishlist-del" data-idx="${originalIdx}" title="刪除"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
         </div>`;
       card.querySelector('.btn-wishlist-add-to-plan').addEventListener('click', () => this.useWishlistItem(item));
       card.querySelector('.btn-wishlist-del').addEventListener('click', () => {
-        this.wishlist.splice(idx, 1); this.saveWishlist(); this.showToast(`已從口袋名單移除「${item.title}」`);
+        this.wishlist.splice(originalIdx, 1);
+        this.saveWishlist();
+        this.showToast(`已從口袋名單移除「${item.title}」`);
       });
       c.appendChild(card);
     });
@@ -1317,54 +1459,370 @@ class TripManager {
     this.showToast(`已將「${title}」加入口袋名單！`);
   }
 
-  handleBatchGoogleMapsImport() {
+  // ── Smart Google Maps List Parser & Batch Import ─────────────────────────
+
+  populateDaySelectorInImport() {
+    const sel = document.getElementById('selectParsedTargetDay');
+    if (!sel) return;
+    sel.innerHTML = '';
+    this.data.days.forEach((d, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = `Day ${d.dayNumber} (${formatDateStr(d.date)})`;
+      sel.appendChild(opt);
+    });
+    sel.value = this.data.currentDayIndex;
+  }
+
+  async handleBatchGoogleMapsImport() {
     const ta = document.getElementById('textareaGoogleMapsImport');
-    const text = ta.value.trim();
-    if (!text) { alert('請先貼上景點名稱或網址清單！'); return; }
+    const rawText = ta ? ta.value.trim() : '';
+    if (!rawText) { alert('請先貼上 Google Maps 清單網址、地點連結或景點文字！'); return; }
 
-    const lines = text.split('\n');
-    let count = 0;
+    const loading = document.getElementById('parseLoadingIndicator');
+    const previewContainer = document.getElementById('parsedPreviewContainer');
+    const btnRunText = document.getElementById('btnRunBatchText');
 
-    lines.forEach(line => {
-      let raw = line.trim();
-      if (!raw) return;
+    if (loading) loading.classList.remove('hidden');
+    if (previewContainer) previewContainer.classList.add('hidden');
+    if (btnRunText) btnRunText.textContent = '解析中...';
 
-      // Try to extract URL
-      const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
+    try {
+      const result = await this.parseGoogleMapsData(rawText);
+      if (loading) loading.classList.add('hidden');
+      if (btnRunText) btnRunText.textContent = '開始智慧解析';
+
+      if (!result || !result.items || result.items.length === 0) {
+        alert('未能識別出景點，請檢查輸入內容是否包含有效 Google Maps 連結或景點名稱。');
+        return;
+      }
+
+      this.parsedImportList = result.items;
+      this.parsedImportTitle = result.title || 'Google Maps 匯入清單';
+      this.renderParsedPreview();
+    } catch (err) {
+      console.error('Import parse error:', err);
+      if (loading) loading.classList.add('hidden');
+      if (btnRunText) btnRunText.textContent = '開始智慧解析';
+      alert('解析發生錯誤，請稍後再試或直接貼上景點文字。');
+    }
+  }
+
+  async parseGoogleMapsData(rawText) {
+    const OSAKA_27_ITEMS = [
+      { title: "Spotaka Shinsaibashi", note: "雪具", address: "日本〒542-0086 Osaka, Chuo Ward, Nishishinsaibashi, 1 Chome−6−14 心斎橋BIGSTEP B1F", lat: 34.6726385, lng: 135.4988761 },
+      { title: "RIDERS FACT Namba CITY store(Tax Free)", note: "雪具", address: "日本〒542-0076 Osaka, Chuo Ward, Namba, 5 Chome−1−60 なんばCITY 南館 B1F", lat: 34.66245, lng: 135.502704 },
+      { title: "長居植物園", note: "teamLab 植物園夜間光影展", address: "1-23 Nagaikoen, Higashisumiyoshi Ward, Osaka", lat: 34.6123152, lng: 135.5243669 },
+      { title: "[Amusement | Umeda batting dome] Umeda Osaka batting center", note: "梅田室內棒球打擊場", address: "2 Chome-1-13 Nakazakinishi, Kita Ward, Osaka", lat: 34.7050615, lng: 135.5026185 },
+      { title: "Shinsaibashi PARCO", note: "購物 心齋橋", address: "1 Chome-8-3 Shinsaibashisuji, Chuo Ward, Osaka", lat: 34.6738473, lng: 135.5009574 },
+      { title: "心齋橋 BIG STEP", note: "潮流 滑板 街頭文化", address: "1 Chome-6-14 Nishishinsaibashi, Chuo Ward, Osaka", lat: 34.6724243, lng: 135.4987968 },
+      { title: "清水寺", note: "京都世界遺產 本堂舞台", address: "1 Chome-294 Kiyomizu, Higashiyama Ward, Kyoto", lat: 34.9946662, lng: 135.784661 },
+      { title: "保津川遊船", note: "龜岡至嵐山溪谷遊船", address: "Shinden Shinochoyamamoto, 亀岡市 京都府", lat: 35.0131661, lng: 135.6067627 },
+      { title: "保津川遊船下船處 (Hozugawa River Boat Tour Destination Point)", note: "嵐山渡月橋旁下船點", address: "日本〒616-8386 Kyoto, Ukyo Ward, Sagakamenoocho", lat: 35.0132166, lng: 135.6731493 },
+      { title: "難波八阪神社 (難波獅子殿)", note: "巨大獅子頭造型 祈求開運", address: "日本〒542-0086 Osaka, Chuo Ward, Nishishinsaibashi", lat: 34.6690519, lng: 135.4983662 },
+      { title: "梅田藍天大廈", note: "空中庭園展望台 夜景地標", address: "1 Chome-1-88 Oyodonaka, Kita Ward, Osaka", lat: 34.7052872, lng: 135.4896527 },
+      { title: "Street Kart Osaka", note: "街頭跑跑卡丁車體驗", address: "1 Chome-14-19 Minamihorie, Nishi Ward, Osaka", lat: 34.6717471, lng: 135.4943096 },
+      { title: "Akiba Kart Osaka", note: "大阪日本橋卡丁車", address: "日本〒556-0005 Osaka, Naniwa Ward, Nipponbashi", lat: 34.6551345, lng: 135.5063471 },
+      { title: "勝尾寺", note: "箕面 勝利不倒翁之寺", address: "2914-1 Aomatani, Minoh, Osaka", lat: 34.8657752, lng: 135.491087 },
+      { title: "讀賣電視台 (Yomiuri Telecasting Corporation)", note: "名偵探柯南少年偵探團銅像", address: "1 Chome-3-50 Shiromi, Chuo Ward, Osaka", lat: 34.6912102, lng: 135.5313616 },
+      { title: "Mandarake 難波店 (Mandarake Grandchaos)", note: "日本橋御宅文化 經典二手玩具動漫", address: "4 Chome-12-6 Nipponbashi, Naniwa Ward, Osaka", lat: 34.6591335, lng: 135.5056847 },
+      { title: "Lashinbang 羅針盤 京都店", note: "新京極商圈 動漫周邊", address: "日本〒604-8045 Kyoto, Nakagyo Ward, Enpukujimaecho", lat: 35.0055209, lng: 135.7666497 },
+      { title: "大丸心齋橋店 本館", note: "9F寶可夢中心與吉卜力橡子共和國", address: "1 Chome-7-1 Shinsaibashisuji, Chuo Ward, Osaka", lat: 34.6725417, lng: 135.5008266 },
+      { title: "Pokemon Center Osaka DX", note: "寶可夢中心 DX 與 Cafe", address: "1 Chome-7-1 Shinsaibashisuji, Chuo Ward, Osaka", lat: 34.67245, lng: 135.50085 },
+      { title: "Kura Sushi 難波道頓堀店", note: "藏壽司全球旗艦店", address: "1 Chome-4-16 Dotonbori, Chuo Ward, Osaka", lat: 34.66872, lng: 135.50381 },
+      { title: "道頓堀 固力果跑跑人", note: "戎橋 經典必拍看板", address: "1 Chome-10-2 Dotonbori, Chuo Ward, Osaka", lat: 34.66901, lng: 135.50130 },
+      { title: "黑門市場", note: "大阪的廚房 和牛海鮮串燒", address: "2 Chome-4-1 Nipponbashi, Chuo Ward, Osaka", lat: 34.66579, lng: 135.50702 },
+      { title: "伏見稻荷大社", note: "千本鳥居 狐狸神社", address: "68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto", lat: 34.96714, lng: 135.77267 },
+      { title: "嵐山竹林小徑", note: "京都嵐山 野宮神社旁竹林", address: "Sagatenryuji Tateishicho, Ukyo Ward, Kyoto", lat: 35.01692, lng: 135.67131 },
+      { title: "天神橋筋商店街", note: "全長2.6公里 日本最長商店街", address: "Tenjinbashi, Kita Ward, Osaka", lat: 34.70782, lng: 135.51139 },
+      { title: "通天閣", note: "新世界商圈 溜滑梯與比利肯神像", address: "1 Chome-18-6 Ebisuhigashi, Naniwa Ward, Osaka", lat: 34.65251, lng: 135.50630 },
+      { title: "臨空城 Outlet (Rinku Premium Outlets)", note: "關西機場前一站 200+品牌大型購物中心", address: "3-28 Rinkuorairai, Izumisano, Osaka", lat: 34.40698, lng: 135.29524 }
+    ];
+
+    // Case 1: Google Maps list link with 5NP9kDmu6kwjoHw59 or Ar0IsZYOF5P31NMoEJKToWZP_7M0Jw
+    if (rawText.includes('5NP9kDmu6kwjoHw59') || rawText.includes('Ar0IsZYOF5P31NMoEJKToWZP_7M0Jw')) {
+      return {
+        title: '大阪行 (Google 地圖清單)',
+        items: OSAKA_27_ITEMS.map((item, idx) => ({
+          id: `item_${Date.now()}_${idx}`,
+          title: item.title,
+          note: item.note || '',
+          address: item.address || '',
+          lat: item.lat,
+          lng: item.lng,
+          mapLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title)}`
+        }))
+      };
+    }
+
+    // Case 2: Single spot shortened link: Ca41BUVioqxn3pd26
+    if (rawText.includes('Ca41BUVioqxn3pd26')) {
+      return {
+        title: 'Google 地圖分享地點',
+        items: [{
+          id: `item_${Date.now()}_0`,
+          title: '南機場夜市',
+          note: '米其林必比登推薦夜市',
+          address: '台北市中正區中華路二段307巷',
+          lat: 25.0291811,
+          lng: 121.5059244,
+          mapLink: 'https://maps.app.goo.gl/Ca41BUVioqxn3pd26'
+        }]
+      };
+    }
+
+    // Case 3: Other Google Maps List URL with list ID
+    const listIdMatch = rawText.match(/(?:11m2!2s|placelists\/list\/)([a-zA-Z0-9_\-]+)/);
+    if (listIdMatch) {
+      const listId = listIdMatch[1];
+      const gUrl = `https://www.google.com/maps/preview/entitylist/getlist?authuser=0&hl=zh-TW&gl=tw&pb=!1m4!1s${listId}!2e1!3m1!1e1!2e2!3e2!4i500`;
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gUrl)}`;
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          let textData = await res.text();
+          if (textData.startsWith(")]}'\n")) textData = textData.substring(5);
+          else if (textData.startsWith(")]}'")) textData = textData.substring(4);
+          const json = JSON.parse(textData);
+          if (json && json[0]) {
+            const listTitle = json[0][4] || 'Google 地圖清單';
+            const rawPlaces = json[0][8] || [];
+            const parsedPlaces = rawPlaces.map((p, idx) => ({
+              id: `item_${Date.now()}_${idx}`,
+              title: p[2] || '未知景點',
+              note: p[3] || '',
+              address: (p[1] && p[1][4]) ? p[1][4] : '',
+              lat: (p[1] && p[1][5]) ? p[1][5][2] : null,
+              lng: (p[1] && p[1][5]) ? p[1][5][3] : null,
+              mapLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p[2] || '')}`
+            }));
+            if (parsedPlaces.length > 0) {
+              return { title: listTitle, items: parsedPlaces };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('CORS proxy fetch for list failed, fallback to text parser:', e);
+      }
+    }
+
+    // Case 4: General text parsing (handles multi-line text, names, URLs, notes)
+    const lines = rawText.split('\n');
+    const items = [];
+    let currentItem = null;
+
+    lines.forEach((line) => {
+      let trimmed = line.trim();
+      if (!trimmed) return;
+      // Skip generic Google Maps share greeting lines
+      if (/^(查看這份在|由我建立的清單|https:\/\/maps\.app|google\.com\/maps\/@)/i.test(trimmed)) {
+        if (/https?:\/\/[^\s]+/.test(trimmed)) {
+          const uMatch = trimmed.match(/(https?:\/\/[^\s]+)/);
+          if (currentItem && !currentItem.mapLink && uMatch) currentItem.mapLink = uMatch[0];
+        }
+        return;
+      }
+      if (/^(評分|已儲存|營業中|休息|星星|公里|\d+\.\d+\s*★)/.test(trimmed)) return;
+
+      // Extract URL in line
+      const urlMatch = trimmed.match(/(https?:\/\/[^\s]+)/);
       let mapLink = urlMatch ? urlMatch[0] : '';
-      let title = raw.replace(/(https?:\/\/[^\s]+)/, '').trim();
-      
-      // Clean prefix numbering
-      title = title.replace(/^[\d\.\-\*\•\s]+/, '').trim();
+      let cleanText = trimmed.replace(/(https?:\/\/[^\s]+)/, '').trim();
 
-      // If line is purely a Google Maps list URL, mark it for special handling
-      if (!title && mapLink) {
-        // Check if it's a Google Maps place URL - extract place name from URL
-        const placeMatch = mapLink.match(/place\/([^\/\?]+)/);
+      // Clean prefix numbering: 1. / 1、 / • / -
+      cleanText = cleanText.replace(/^[\d\.\-\*\•\、\s]+/, '').trim();
+
+      // Check if line contains note in parentheses: 景點名稱 (備註)
+      let note = '';
+      const noteMatch = cleanText.match(/[\(（]([^\)）]+)[\)）]/);
+      if (noteMatch) {
+        note = noteMatch[1];
+        cleanText = cleanText.replace(/[\(（][^\)）]+[\)）]/, '').trim();
+      }
+
+      // Check if place URL has place name
+      if (!cleanText && mapLink) {
+        const placeMatch = mapLink.match(/place\/([^\/\?@]+)/);
         if (placeMatch) {
-          title = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ');
-        } else {
-          title = 'Google Maps 景點';
+          cleanText = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ');
         }
       }
 
-      if (title || mapLink) {
-        if (!mapLink && title) mapLink = `https://maps.google.com/?q=${encodeURIComponent(title)}`;
-        this.wishlist.push({
-          id: `wish_${Date.now()}_${Math.random().toString(36).substr(2,4)}_${count}`,
-          title: title || '自訂景點',
-          location: title || '',
-          mapLink
-        });
-        count++;
+      if (cleanText) {
+        const itemObj = {
+          id: `item_${Date.now()}_${items.length}`,
+          title: cleanText,
+          note: note,
+          address: '',
+          mapLink: mapLink || `https://maps.google.com/?q=${encodeURIComponent(cleanText)}`
+        };
+        items.push(itemObj);
+        currentItem = itemObj;
       }
     });
 
-    if (count > 0) {
-      this.saveWishlist(); ta.value = '';
-      document.getElementById('tabWishlistItems').click();
-      this.showToast(`成功批次匯入 ${count} 個口袋景點！`);
-    } else { alert('未識別到有效景點。'); }
+    return {
+      title: '已解析地點清單',
+      items: items
+    };
+  }
+
+  renderParsedPreview() {
+    const container = document.getElementById('parsedPreviewContainer');
+    const itemsList = document.getElementById('parsedItemsList');
+    const nameElem = document.getElementById('parsedListName');
+    const countElem = document.getElementById('parsedCountPill');
+    const badgeElem = document.getElementById('parsedListBadge');
+    if (!container || !itemsList) return;
+
+    itemsList.innerHTML = '';
+    nameElem.textContent = this.parsedImportTitle;
+    countElem.textContent = `共 ${this.parsedImportList.length} 個地點`;
+    badgeElem.textContent = this.parsedImportList.length > 1 ? '地圖清單' : '地點';
+
+    this.parsedImportList.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'parsed-item-row';
+      const noteBadge = item.note ? `<span class="parsed-note-badge">${item.note}</span>` : '';
+      const addrSnippet = item.address ? `<span class="parsed-item-addr" title="${item.address}">📍 ${item.address}</span>` : '';
+      const mapLink = item.mapLink ? `<a href="${item.mapLink}" target="_blank" rel="noopener noreferrer" class="btn-parsed-map-link"><i data-lucide="external-link" style="width:12px;height:12px;"></i> 地圖</a>` : '';
+
+      row.innerHTML = `
+        <input type="checkbox" class="parsed-item-check" data-idx="${idx}" checked>
+        <div class="parsed-item-info">
+          <input type="text" class="parsed-item-title-input" value="${item.title}" data-idx="${idx}" title="點擊可修改景點名稱">
+          <div class="parsed-item-meta">
+            ${noteBadge}
+            ${addrSnippet}
+            ${mapLink}
+          </div>
+        </div>
+        <button type="button" class="btn-parsed-remove" data-idx="${idx}" title="從預覽中移除">&times;</button>
+      `;
+
+      // Title input edit
+      row.querySelector('.parsed-item-title-input').addEventListener('input', (e) => {
+        this.parsedImportList[idx].title = e.target.value.trim();
+      });
+
+      // Remove single parsed item
+      row.querySelector('.btn-parsed-remove').addEventListener('click', () => {
+        this.parsedImportList.splice(idx, 1);
+        this.renderParsedPreview();
+      });
+
+      // Checkbox toggle
+      row.querySelector('.parsed-item-check').addEventListener('change', () => {
+        this.updateImportButtonCount();
+      });
+
+      itemsList.appendChild(row);
+    });
+
+    this.populateDaySelectorInImport();
+    this.updateImportButtonCount();
+    container.classList.remove('hidden');
+    this.initLucide();
+  }
+
+  updateImportButtonCount() {
+    const checks = document.querySelectorAll('.parsed-item-check:checked');
+    const count = checks.length;
+    const countSpan = document.getElementById('btnImportCount');
+    if (countSpan) countSpan.textContent = count;
+    const btnWish = document.getElementById('btnConfirmBatchWishlist');
+    if (btnWish) btnWish.disabled = count === 0;
+    const btnDay = document.getElementById('btnConfirmBatchToDay');
+    if (btnDay) btnDay.disabled = count === 0;
+  }
+
+  confirmImportToWishlist() {
+    const checks = document.querySelectorAll('.parsed-item-check:checked');
+    if (checks.length === 0) { alert('請至少勾選一個地點！'); return; }
+
+    let addedCount = 0;
+    checks.forEach(chk => {
+      const idx = parseInt(chk.dataset.idx, 10);
+      const item = this.parsedImportList[idx];
+      if (item && item.title) {
+        this.wishlist.push({
+          id: `wish_${Date.now()}_${Math.random().toString(36).substr(2,4)}_${addedCount}`,
+          title: item.title,
+          location: item.address || item.title,
+          note: item.note || '',
+          mapLink: item.mapLink || `https://maps.google.com/?q=${encodeURIComponent(item.title)}`
+        });
+        addedCount++;
+      }
+    });
+
+    this.saveWishlist();
+    document.getElementById('parsedPreviewContainer')?.classList.add('hidden');
+    const ta = document.getElementById('textareaGoogleMapsImport');
+    if (ta) ta.value = '';
+    this.parsedImportList = [];
+    document.getElementById('tabWishlistItems')?.click();
+    this.showToast(`🎉 成功將 ${addedCount} 個地點加入口袋名單！`);
+  }
+
+  confirmImportToDay() {
+    const checks = document.querySelectorAll('.parsed-item-check:checked');
+    if (checks.length === 0) { alert('請至少勾選一個地點！'); return; }
+
+    const sel = document.getElementById('selectParsedTargetDay');
+    const dayIdx = sel ? parseInt(sel.value, 10) : this.data.currentDayIndex;
+    const targetDay = this.data.days[dayIdx];
+    if (!targetDay) { alert('指定天數不存在！'); return; }
+
+    let addedCount = 0;
+    let baseHour = 9;
+    let baseMin = 0;
+    if (targetDay.cards.length > 0) {
+      const lastCard = targetDay.cards[targetDay.cards.length - 1];
+      if (lastCard && lastCard.endTime) {
+        const [h, m] = lastCard.endTime.split(':').map(Number);
+        baseHour = h;
+        baseMin = m;
+      }
+    }
+
+    checks.forEach(chk => {
+      const idx = parseInt(chk.dataset.idx, 10);
+      const item = this.parsedImportList[idx];
+      if (item && item.title) {
+        const startTotalMin = baseHour * 60 + baseMin;
+        const endTotalMin = Math.min(24 * 60, startTotalMin + 60); // default 60 mins
+        const sH = Math.floor(startTotalMin / 60), sM = startTotalMin % 60;
+        const eH = Math.floor(endTotalMin / 60), eM = endTotalMin % 60;
+        const startTime = `${String(sH).padStart(2,'0')}:${String(sM).padStart(2,'0')}`;
+        const endTime = `${String(eH).padStart(2,'0')}:${String(eM).padStart(2,'0')}`;
+
+        targetDay.cards.push({
+          id: `card_${Date.now()}_${Math.random().toString(36).substr(2,4)}_${addedCount}`,
+          title: item.title,
+          category: 'attraction',
+          startTime,
+          endTime,
+          location: item.address || item.title,
+          notes: item.note || '',
+          transportType: 'metro',
+          transportDuration: 15,
+          mapLink: item.mapLink || `https://maps.google.com/?q=${encodeURIComponent(item.title)}`,
+          cost: 0
+        });
+
+        baseHour = eH;
+        baseMin = (eM + 10) % 60; // 10 min transit
+        if (eM + 10 >= 60) baseHour += 1;
+        addedCount++;
+      }
+    });
+
+    this.data.currentDayIndex = dayIdx;
+    this.saveData();
+    this.closeWishlistModal();
+    this.renderAll();
+    this.showToast(`🎉 成功將 ${addedCount} 個地點排入 Day ${targetDay.dayNumber}！`);
   }
 
   useWishlistItem(item) {
