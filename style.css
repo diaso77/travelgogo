@@ -453,6 +453,7 @@ body {
   height: var(--slot-height);
   display: flex;
   align-items: flex-start;
+  padding-top: 2px;
   justify-content: center;
   font-size: 0;
   color: var(--text-dim);
@@ -482,12 +483,14 @@ body {
   border-left: 1px solid var(--border-subtle);
   /* Background grid: hour lines every 6 slots (6*20=120px) */
   background-size: 100% 120px;
+  background-repeat: repeat-y;
   background-image: linear-gradient(
     to bottom,
     transparent 119px,
     var(--border-subtle) 119px,
     var(--border-subtle) 120px
   );
+  /* background-position-y set by JS to align grid with ruler when early hours folded */
 }
 
 /* Schedule Activity Card on Canvas */
@@ -1257,7 +1260,7 @@ input[type="date"] {
   .header-actions .btn-text { display: none; }
   .btn-icon { width: 34px; height: 34px; }
   .btn-primary { padding: 7px 10px; font-size: 0.8rem; }
-  .span-range-pills { display: none; }
+  .span-range-pills { display: inline-flex; }
   .day-tab { padding: 4px 10px; font-size: 0.75rem; }
   .day-tab small { display: none; }
   .mobile-float-bar { padding: 6px 8px; }
@@ -1275,7 +1278,7 @@ input[type="date"] {
 @media (max-width: 479px) {
   .header-actions .btn-text { display: none; }
   .header-actions { gap: 4px; }
-  .span-range-pills { display: none; }
+  .span-range-pills { display: inline-flex; }
   .day-tab small { font-size: 0.68rem; }
   .modal-card { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .modal-backdrop { align-items: flex-end; padding: 0; }
@@ -2368,6 +2371,115 @@ input[type="date"] {
   padding: 1px 6px;
   border-radius: 10px;
   margin-left: 4px;
+}
+
+/* ==========================================================================
+   Early Morning Collapse & All-Day Floating Items
+   ========================================================================== */
+
+/* All-Day / Unscheduled Section */
+.allday-section {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: fadeIn var(--transition-fast) forwards;
+}
+
+.allday-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.allday-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.allday-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.allday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.allday-chip:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.allday-chip-loc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.allday-chip-cost {
+  font-size: 0.66rem;
+  color: var(--accent-amber);
+  font-weight: 700;
+}
+
+/* Early Morning Banner */
+.early-morning-banner {
+  background: rgba(15, 23, 42, 0.4);
+  border-bottom: 1px dashed var(--border-subtle);
+  padding: 4px 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-toggle-early {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 3px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.btn-toggle-early:hover {
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Hide Early Hours (00:00 - 06:00 is slots 0 to 35) */
+.timeline-container.hide-early-hours .time-slot-label.early-slot {
+  display: none !important;
+}
+
+.timeline-container.hide-early-hours {
+  /* 108 slots remaining (18h * 6 slots = 108) */
+  min-height: calc(108 * var(--slot-height));
 }
 
 /* Current Time Indicator Glowing Pulse */

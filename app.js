@@ -122,6 +122,7 @@ class TripManager {
     this.undoStack          = [];
     this.timeIndicatorInterval = null;
     this.wishlistSelectMode = false;
+    this.showEarlyHours     = false; // Default fold 00:00 - 06:00
     this.init();
   }
 
@@ -227,8 +228,11 @@ class TripManager {
     if (cur.date !== todayStr) return;
 
     const totalMin = now.getHours() * 60 + now.getMinutes();
-    const slot = totalMin / SLOT_MINUTES;
-    const topPx = slot * SLOT_HEIGHT;
+    const rawSlot = totalMin / SLOT_MINUTES;
+    const startSlotOffset = (!this.showEarlyHours) ? 36 : 0;
+    const effectiveSlot = rawSlot - startSlotOffset;
+    if (effectiveSlot < 0) return; // Time is before 06:00 and early hours is folded
+    const topPx = effectiveSlot * SLOT_HEIGHT;
     const canvas = document.getElementById('scheduleCanvas');
     if (!canvas || this.currentViewMode !== 'timeline' || this.currentSpanDays > 1) return;
     const line = document.createElement('div');
@@ -245,6 +249,7 @@ class TripManager {
   renderAll() {
     this.renderHeader();
     this.renderDayTabs();
+    this.renderAllDaySection();
     if (this.currentSpanDays > 1) {
       this.renderMultiDayView();
     } else {
@@ -299,6 +304,42 @@ class TripManager {
     document.getElementById('currentDayCardCount').textContent = info;
   }
 
+  // ── All-Day / Unscheduled Section ────────────────────────────────────────
+
+  renderAllDaySection() {
+    const sec = document.getElementById('allDaySection');
+    const list = document.getElementById('allDayList');
+    const cntElem = document.getElementById('allDayCount');
+    if (!sec || !list) return;
+
+    const cur = this.getCurrentDay();
+    const allDayCards = (cur.cards || []).filter(c => c.isAllDay);
+    if (cntElem) cntElem.textContent = allDayCards.length;
+
+    if (allDayCards.length === 0) {
+      sec.classList.add('hidden');
+      list.innerHTML = '';
+      return;
+    }
+
+    sec.classList.remove('hidden');
+    list.innerHTML = '';
+    allDayCards.forEach(card => {
+      const chip = document.createElement('div');
+      chip.className = 'allday-chip';
+      chip.style.borderLeftColor = card.color || '#38bdf8';
+      const costHtml = (card.cost && parseFloat(card.cost) > 0) 
+        ? `<span class="allday-chip-cost">${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</span>` : '';
+      chip.innerHTML = `
+        <span style="font-weight:700;">${card.title}</span>
+        ${card.location ? `<span class="allday-chip-loc">📍 ${card.location}</span>` : ''}
+        ${costHtml}
+      `;
+      chip.addEventListener('click', () => this.openDetailModal(card));
+      list.appendChild(chip);
+    });
+  }
+
   // ── Day context menu ─────────────────────────────────────────────────────
 
   showDayContextMenu(dayIndex, event) {
@@ -345,12 +386,14 @@ class TripManager {
   renderTimeRuler() {
     const ruler = document.getElementById('timeRuler');
     ruler.innerHTML = '';
-    for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
+    const startSlot = (!this.showEarlyHours) ? 36 : 0; // 36 slots = 06:00
+    for (let slot = startSlot; slot < TOTAL_SLOTS; slot++) {
       const totalMin = slot * SLOT_MINUTES;
       const h = Math.floor(totalMin / 60);
       const m = totalMin % 60;
       const el = document.createElement('div');
       el.className = 'time-slot-label';
+      if (slot < 36) el.classList.add('early-slot');
       if (m === 0) {
         el.classList.add('hour-mark');
         el.textContent = `${String(h).padStart(2,'0')}:00`;
@@ -358,9 +401,23 @@ class TripManager {
         el.classList.add('half-mark');
         el.textContent = `${String(h).padStart(2,'0')}:30`;
       }
-      // 10-min and 20-min marks are blank (just grid lines)
       ruler.appendChild(el);
     }
+
+    // Update early banner text and chevron
+    const bannerText = document.getElementById('earlyHoursText');
+    const chevron = document.getElementById('earlyHoursChevron');
+    const container = document.getElementById('timelineContainer');
+    if (this.showEarlyHours) {
+      if (bannerText) bannerText.textContent = '收合凌晨時段 (00:00 - 06:00)';
+      if (chevron) chevron.setAttribute('data-lucide', 'chevron-up');
+      container?.classList.remove('hide-early-hours');
+    } else {
+      if (bannerText) bannerText.textContent = '展開凌晨時段 (00:00 - 06:00)';
+      if (chevron) chevron.setAttribute('data-lucide', 'chevron-down');
+      container?.classList.add('hide-early-hours');
+    }
+    this.initLucide();
   }
 
   // ── Multi-day span view ──────────────────────────────────────────────────
@@ -452,9 +509,32 @@ class TripManager {
     const canvas = document.getElementById('scheduleCanvas');
     canvas.innerHTML = '';
     const cur = this.getCurrentDay();
-    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    // ── Filter: skip isAllDay cards (handled in allDaySection) ──────────────
+    const allSorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    const timedCards = allSorted.filter(c => !c.isAllDay);
 
-    if (sorted.length === 0) {
+    // ── Offset: when early hours are folded, slot 0=06:00 on the canvas ─────
+    const startSlotOffset = (!this.showEarlyHours) ? 36 : 0; // 36 * 10min = 360min = 06:00
+
+    // Update canvas grid-line background-position to match offset ────────────
+    // Each hour = 6 slots * 20px = 120px. Offset = startSlotOffset slots.
+    const offsetPx = startSlotOffset * SLOT_HEIGHT;
+    // background-position-y shifts the repeating grid up by the offset so
+    // the first visible line aligns with the ruler's first hour label.
+    canvas.style.backgroundPositionY = `${-(offsetPx % 120)}px`;
+
+    if (timedCards.length === 0 && cur.cards.every(c => c.isAllDay)) {
+      canvas.innerHTML = `
+        <div class="timeline-empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>這一天還沒有時間表行程安排</h3>
+          <p>點擊下方「快速排程」或右上角「新增行程」開始規劃吧！</p>
+          <button class="btn btn-primary" onclick="window.tripManager.openAddModal()"><i data-lucide="plus"></i> 新增第一個行程</button>
+        </div>`;
+      this.initLucide();
+      return;
+    }
+    if (timedCards.length === 0) {
       canvas.innerHTML = `
         <div class="timeline-empty-state">
           <div class="empty-state-icon">📋</div>
@@ -466,13 +546,14 @@ class TripManager {
       return;
     }
 
-    const layout = this.calculateOverlapLayout(sorted);
+    const layout = this.calculateOverlapLayout(timedCards);
 
-    sorted.forEach((card, idx) => {
+    timedCards.forEach((card, idx) => {
       const ss = this.timeToSlot(card.startTime);
       const es = Math.max(ss + 1, this.timeToSlot(card.endTime));
       const dur = es - ss;
-      const top = ss * SLOT_HEIGHT;
+      // ── Offset-adjusted top position ─────────────────────────────────────
+      const top = Math.max(0, (ss - startSlotOffset) * SLOT_HEIGHT);
       const ht = Math.max(32, dur * SLOT_HEIGHT - 4);
 
       const el = document.createElement('div');
@@ -511,16 +592,17 @@ class TripManager {
         </div>`;
 
       el.addEventListener('click', (e) => { if (!el.classList.contains('is-dragging')) this.openDetailModal(card); });
-      this.attachDragEvents(el, card, ss, dur);
+      this.attachDragEvents(el, card, ss, dur, startSlotOffset);
       canvas.appendChild(el);
 
       // Transit or Free-time Gap indicator
-      if (idx < sorted.length - 1) {
-        const next = sorted[idx + 1];
+      if (idx < timedCards.length - 1) {
+        const next = timedCards[idx + 1];
         const ns = this.timeToSlot(next.startTime);
         if (ns > es) {
           const gapMin = (ns - es) * SLOT_MINUTES;
-          const tTop = es * SLOT_HEIGHT;
+          // ── Offset-adjusted gap position ──────────────────────────────────
+          const tTop = (es - startSlotOffset) * SLOT_HEIGHT;
           const tHt = (ns - es) * SLOT_HEIGHT;
 
           if (next.transportNote) {
@@ -569,7 +651,7 @@ class TripManager {
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
 
-  attachDragEvents(element, card, origSlot, durSlots) {
+  attachDragEvents(element, card, origSlot, durSlots, startSlotOffset = 0) {
     let startY = 0, initTop = 0, moved = false, scrollIv = null;
     const viewport = document.querySelector('.main-viewport');
     const handle = element.querySelector('.card-drag-handle');
@@ -608,7 +690,8 @@ class TripManager {
         clearInterval(scrollIv);
         if (moved) {
           element.classList.remove('is-dragging');
-          const ns = Math.round(parseFloat(element.style.top) / SLOT_HEIGHT);
+          // Add startSlotOffset back so slot maps to the correct clock time
+          const ns = Math.round(parseFloat(element.style.top) / SLOT_HEIGHT) + startSlotOffset;
           const newStart = this.slotToTime(ns);
           const newEnd = this.slotToTime(ns + durSlots);
           if (newStart === card.startTime) { element.style.top = `${initTop}px`; return; }
@@ -643,15 +726,21 @@ class TripManager {
         <button class="btn btn-primary" style="margin-top:12px;" onclick="window.tripManager.openAddModal()"><i data-lucide="plus"></i> 新增行程</button></div>`;
       this.initLucide(); return;
     }
-    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    // isAllDay cards at end, timed cards sorted by start time
+    const sorted = [...cur.cards].sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return 1;
+      if (!a.isAllDay && b.isAllDay) return -1;
+      return this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime);
+    });
     sorted.forEach(card => {
       const el = document.createElement('div');
       el.className = 'list-item-card';
       const costStr = (card.cost && parseFloat(card.cost) > 0) ? `<span style="color:var(--accent-amber);font-size:0.72rem;font-weight:600;">💰 ${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</span>` : '';
+      const timeBlock = card.isAllDay
+        ? `<div class="list-time-block" style="border-left:4px solid ${card.color||'#38bdf8'};padding-left:8px;"><div style="font-size:0.72rem;color:var(--accent-primary);font-weight:700;">📌</div><small style="color:var(--text-dim);font-size:0.65rem;">彈性</small></div>`
+        : `<div class="list-time-block" style="border-left:4px solid ${card.color||'#38bdf8'};padding-left:8px;"><div>${card.startTime}</div><small style="color:var(--text-dim);">${card.endTime}</small></div>`;
       el.innerHTML = `
-        <div class="list-time-block" style="border-left:4px solid ${card.color||'#38bdf8'};padding-left:8px;">
-          <div>${card.startTime}</div><small style="color:var(--text-dim);">${card.endTime}</small>
-        </div>
+        ${timeBlock}
         <div class="list-info-block">
           <h4 style="font-size:0.95rem;font-weight:700;">${card.title}</h4>
           <p style="font-size:0.8rem;color:var(--text-muted);">${card.location || '無地點備註'}</p>
@@ -668,15 +757,35 @@ class TripManager {
   // ── Route Map (Leaflet) ──────────────────────────────────────────────────
 
   resolveCoordinates(card, index) {
-    if (typeof card.lat === 'number' && typeof card.lng === 'number') return [card.lat, card.lng];
-    const t = (card.location + ' ' + card.title + ' ' + (card.mapLink || '')).toLowerCase();
-    for (const [k, v] of Object.entries(KNOWN_GEO_DICT)) { if (t.includes(k)) return v; }
+    if (typeof card.lat === 'number' && typeof card.lng === 'number' && !isNaN(card.lat) && !isNaN(card.lng)) {
+      return [card.lat, card.lng];
+    }
+    // Try to extract lat/lng from mapLink
+    if (card.mapLink) {
+      // Format 1: @25.0291811,121.5059244
+      const atMatch = card.mapLink.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (atMatch) return [parseFloat(atMatch[1]), parseFloat(atMatch[2])];
+      // Format 2: ?q=25.0291811,121.5059244 or &query=25.0291811,121.5059244
+      const qCoordMatch = card.mapLink.match(/[?&](?:q|query)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (qCoordMatch) return [parseFloat(qCoordMatch[1]), parseFloat(qCoordMatch[2])];
+      // Format 3: !3d25.0291811!4d121.5059244
+      const dMatch = card.mapLink.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+      if (dMatch) return [parseFloat(dMatch[1]), parseFloat(dMatch[2])];
+    }
+
+    const t = ((card.location || '') + ' ' + (card.title || '') + ' ' + (card.mapLink ? decodeURIComponent(card.mapLink) : '')).toLowerCase();
+    for (const [k, v] of Object.entries(KNOWN_GEO_DICT)) { 
+      if (t.includes(k.toLowerCase())) return v; 
+    }
     return [35.6812 + index * 0.015, 139.7671 + index * 0.012];
   }
 
   renderRouteMap() {
     const cur = this.getCurrentDay();
-    const sorted = [...cur.cards].sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    // Include both timed and allDay cards; timed first sorted by time, allDay after
+    const timedSorted = cur.cards.filter(c => !c.isAllDay).sort((a, b) => this.timeToSlot(a.startTime) - this.timeToSlot(b.startTime));
+    const allDaySorted = cur.cards.filter(c => c.isAllDay);
+    const sorted = [...timedSorted, ...allDaySorted];
     const stepper = document.getElementById('routeStepperList');
     stepper.innerHTML = '';
     document.getElementById('routeTotalInfo').textContent = `共 ${sorted.length} 個景點節點串聯`;
@@ -693,18 +802,20 @@ class TripManager {
     sorted.forEach((card, i) => {
       const n = i + 1, co = this.resolveCoordinates(card, i);
       pts.push(co); wps.push(encodeURIComponent(card.location || card.title));
-      const icon = L.divIcon({ className: 'custom-map-node', html: `<div class="node-pin-bubble" style="background:${card.color||'#38bdf8'}">${n}</div>`, iconSize: [32,32], iconAnchor: [16,16] });
+      const icon = L.divIcon({ className: 'custom-map-node', html: `<div class="node-pin-bubble" style="background:${card.color||'#38bdf8'};${card.isAllDay ? 'opacity:0.75;outline:2px dashed #fff;' : ''}">${n}</div>`, iconSize: [32,32], iconAnchor: [16,16] });
       const marker = L.marker(co, { icon }).addTo(this.mapLayersGroup);
       const costLine = (card.cost && parseFloat(card.cost) > 0) ? `<div style="font-size:0.75rem;color:#f59e0b;margin-top:2px;">💰 ${this.data.currency} ${parseFloat(card.cost).toLocaleString()}</div>` : '';
-      marker.bindPopup(`<div style="font-family:var(--font-family);min-width:130px;"><b style="font-size:0.95rem;">#${n} ${card.title}</b><div style="font-size:0.8rem;color:#475569;margin-top:2px;">🕒 ${card.startTime} - ${card.endTime}</div><div style="font-size:0.8rem;color:#0284c7;">📍 ${card.location || '無地點'}</div>${costLine}</div>`);
+      const timeInfo = card.isAllDay ? '📌 彈性待訪（未定時間）' : `🕒 ${card.startTime} - ${card.endTime}`;
+      marker.bindPopup(`<div style="font-family:var(--font-family);min-width:130px;"><b style="font-size:0.95rem;">#${n} ${card.title}</b>${card.isAllDay ? '<span style="font-size:0.68rem;background:#7c3aed;color:#fff;padding:1px 5px;border-radius:8px;margin-left:4px;">彈性</span>' : ''}<div style="font-size:0.8rem;color:#475569;margin-top:2px;">${timeInfo}</div><div style="font-size:0.8rem;color:#0284c7;">📍 ${card.location || '無地點'}</div>${costLine}</div>`);
 
       const next = sorted[i + 1];
       const si = document.createElement('div');
       si.className = 'stepper-node-item';
+      const stepTimeLabel = card.isAllDay ? '<span class="stepper-time" style="color:var(--accent-purple);font-size:0.68rem;">📌 彈性</span>' : `<span class="stepper-time">${card.startTime}</span>`;
       si.innerHTML = `<div class="stepper-line"></div><div class="stepper-badge" style="background:${card.color||'#38bdf8'}">${n}</div>
-        <div class="stepper-info"><div class="stepper-header"><span class="stepper-name">${card.title}</span><span class="stepper-time">${card.startTime}</span></div>
+        <div class="stepper-info"><div class="stepper-header"><span class="stepper-name">${card.title}</span>${stepTimeLabel}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);">${card.location||'自訂目標'}</div>
-        ${next && next.transportNote ? `<div class="stepper-transit-tag">${TRANSPORT_MAP[next.transportType]||'🚗 交通'}：${next.transportNote}</div>` : ''}</div>`;
+        ${next && next.transportNote && !card.isAllDay ? `<div class="stepper-transit-tag">${TRANSPORT_MAP[next.transportType]||'🚗 交通'}：${next.transportNote}</div>` : ''}</div>`;
       si.addEventListener('click', () => { this.leafletMap.flyTo(co, 14, { duration: 0.8 }); marker.openPopup(); });
       stepper.appendChild(si);
     });
@@ -777,18 +888,46 @@ class TripManager {
         nowLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else {
         const now = new Date();
-        const slot = Math.floor((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES);
-        document.getElementById('timelineContainer')?.scrollTo({ top: slot * SLOT_HEIGHT, behavior: 'smooth' });
+        const rawSlot = (now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES;
+        const startSlotOffset = (!this.showEarlyHours) ? 36 : 0;
+        const adjSlot = Math.max(0, rawSlot - startSlotOffset);
+        document.getElementById('timelineContainer')?.scrollTo({ top: adjSlot * SLOT_HEIGHT, behavior: 'smooth' });
       }
     });
 
     document.querySelectorAll('.time-jump-bar .jump-chip[data-time]').forEach(chip => {
       chip.addEventListener('click', () => {
         const [h, m] = chip.dataset.time.split(':').map(Number);
-        const slot = (h * 60 + (m || 0)) / SLOT_MINUTES;
-        document.getElementById('timelineContainer')?.scrollTo({ top: slot * SLOT_HEIGHT, behavior: 'smooth' });
+        const rawSlot = (h * 60 + (m || 0)) / SLOT_MINUTES;
+        const startSlotOffset = (!this.showEarlyHours) ? 36 : 0;
+        const adjSlot = Math.max(0, rawSlot - startSlotOffset);
+        document.getElementById('timelineContainer')?.scrollTo({ top: adjSlot * SLOT_HEIGHT, behavior: 'smooth' });
       });
     });
+
+    // ── Early Morning Toggle ──────────────────────────────────────────────
+    document.getElementById('btnToggleEarlyHours')?.addEventListener('click', () => {
+      this.showEarlyHours = !this.showEarlyHours;
+      this.renderTimeRuler();
+      this.renderSchedule();
+      this.updateTimeIndicator();
+    });
+
+    // ── All-Day Checkbox: toggle time inputs visibility ───────────────────
+    const cardIsAllDayEl = document.getElementById('cardIsAllDay');
+    const cardTimeGroupEl = document.getElementById('cardTimeInputsGroup');
+    const toggleAllDayUI = () => {
+      const isAllDay = cardIsAllDayEl?.checked;
+      if (cardTimeGroupEl) cardTimeGroupEl.style.display = isAllDay ? 'none' : '';
+      const st = document.getElementById('cardStartTime');
+      const et = document.getElementById('cardEndTime');
+      if (st) { if (isAllDay) st.removeAttribute('required'); else st.setAttribute('required', ''); }
+      if (et) { if (isAllDay) et.removeAttribute('required'); else et.setAttribute('required', ''); }
+    };
+    cardIsAllDayEl?.addEventListener('change', toggleAllDayUI);
+
+    // ── Quick Add All-Day (unscheduled) ──────────────────────────────────
+    document.getElementById('btnAddAllDayQuick')?.addEventListener('click', () => this.openAddModal(true));
 
     // Quick duration chips in card modal
     document.querySelectorAll('.duration-chip').forEach(chip => {
@@ -1182,7 +1321,18 @@ class TripManager {
     if (b) b.classList.toggle('hidden', this.undoStack.length === 0);
   }
 
-  openAddModal() {
+  _applyAllDayUI(isAllDay) {
+    const cb = document.getElementById('cardIsAllDay');
+    const grp = document.getElementById('cardTimeInputsGroup');
+    const st = document.getElementById('cardStartTime');
+    const et = document.getElementById('cardEndTime');
+    if (cb) cb.checked = !!isAllDay;
+    if (grp) grp.style.display = isAllDay ? 'none' : '';
+    if (st) { if (isAllDay) st.removeAttribute('required'); else st.setAttribute('required', ''); }
+    if (et) { if (isAllDay) et.removeAttribute('required'); else et.setAttribute('required', ''); }
+  }
+
+  openAddModal(isAllDay = false) {
     document.getElementById('modalTitle').textContent = '新增行程卡片';
     document.getElementById('editCardId').value = '';
     document.getElementById('cardTitle').value = '';
@@ -1199,6 +1349,7 @@ class TripManager {
     this.selectedColor = COLOR_PRESETS[0];
     this.renderColorPalette();
     this.selectTransportType('subway');
+    this._applyAllDayUI(isAllDay);
     document.getElementById('cardModal').classList.remove('hidden');
   }
 
@@ -1219,6 +1370,7 @@ class TripManager {
     this.selectedColor = card.color || COLOR_PRESETS[0];
     this.renderColorPalette();
     this.selectTransportType(card.transportType || 'subway');
+    this._applyAllDayUI(!!card.isAllDay);
     document.getElementById('cardModal').classList.remove('hidden');
   }
 
@@ -1234,12 +1386,13 @@ class TripManager {
     const id = document.getElementById('editCardId').value;
     const title = document.getElementById('cardTitle').value.trim();
     const tdi = parseInt(document.getElementById('cardTargetDay').value, 10);
-    const st = document.getElementById('cardStartTime').value;
-    const et = document.getElementById('cardEndTime').value;
+    const isAllDay = !!(document.getElementById('cardIsAllDay')?.checked);
+    const st = isAllDay ? '' : document.getElementById('cardStartTime').value;
+    const et = isAllDay ? '' : document.getElementById('cardEndTime').value;
     const loc = document.getElementById('cardLocation').value.trim();
     let ml = document.getElementById('cardMapLink').value.trim();
     const url = document.getElementById('cardUrl').value.trim();
-    const tn = document.getElementById('cardTransportNote').value.trim();
+    const tn = isAllDay ? '' : document.getElementById('cardTransportNote').value.trim();
     const notes = document.getElementById('cardNotes').value.trim();
     const cost = document.getElementById('cardCost').value.trim();
     const color = this.selectedColor;
@@ -1252,7 +1405,7 @@ class TripManager {
       let found = null, origIdx = -1;
       this.data.days.forEach((d, di) => { const c = d.cards.find(x => x.id === id); if (c) { found = c; origIdx = di; } });
       if (found) {
-        Object.assign(found, { title, startTime: st, endTime: et, color, location: loc, mapLink: ml, url, transportType: this.selectedTransportType, transportNote: tn, notes, cost });
+        Object.assign(found, { title, isAllDay, startTime: st, endTime: et, color, location: loc, mapLink: ml, url, transportType: this.selectedTransportType, transportNote: tn, notes, cost });
         if (origIdx !== tdi) {
           this.data.days[origIdx].cards = this.data.days[origIdx].cards.filter(c => c.id !== id);
           targetDay.cards.push(found);
@@ -1261,13 +1414,13 @@ class TripManager {
       }
     } else {
       targetDay.cards.push({
-        id: `card_${Date.now()}`, title, startTime: st, endTime: et, color, location: loc, mapLink: ml, url,
+        id: `card_${Date.now()}`, title, isAllDay, startTime: st, endTime: et, color, location: loc, mapLink: ml, url,
         transportType: this.selectedTransportType, transportNote: tn, notes, cost
       });
       this.data.currentDayIndex = tdi;
     }
     this.saveData(); this.closeCardModal(); this.renderAll();
-    this.showToast('行程已成功儲存！');
+    this.showToast(isAllDay ? '彈性行程已加入當日候選清單！' : '行程已成功儲存！');
   }
 
   handleDeleteCard() {
@@ -1332,7 +1485,7 @@ class TripManager {
     const modal = document.getElementById('detailModal');
     modal.dataset.activeCardId = card.id;
     document.getElementById('detailTitle').textContent = card.title;
-    document.getElementById('detailTimeBadge').textContent = `${card.startTime} - ${card.endTime}`;
+    document.getElementById('detailTimeBadge').textContent = card.isAllDay ? '📌 彈性待訪（未指定時間）' : `${card.startTime} - ${card.endTime}`;
 
     const cb = document.getElementById('detailCostBadge');
     if (cb) {
@@ -1373,7 +1526,27 @@ class TripManager {
     this.initLucide();
   }
 
-  extractMapQuery(url) { try { return new URL(url).searchParams.get('q') || ''; } catch { return ''; } }
+  extractMapQuery(url) {
+    if (!url) return '';
+    try {
+      // 1. Check place name: /place/Place+Name/
+      const placeMatch = url.match(/\/place\/([^\/\?@]+)/);
+      if (placeMatch) {
+        return decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ');
+      }
+      // 2. Check search params: ?q=... or &query=...
+      const u = new URL(url);
+      const q = u.searchParams.get('q') || u.searchParams.get('query');
+      if (q) return q;
+      // 3. Check @lat,lng
+      const coordMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (coordMatch) return `${coordMatch[1]},${coordMatch[2]}`;
+      // 4. Return whole url if fallback
+      return '';
+    } catch {
+      return '';
+    }
+  }
 
   closeDetailModal() {
     document.getElementById('detailModal').classList.add('hidden');
@@ -1990,11 +2163,12 @@ class TripManager {
       this.showToast(`已將「${item.title}」帶入表單！`);
     } else {
       this.closeWishlistModal();
-      this.openAddModal();
+      // Open as all-day/flexible so user can choose whether to set a time
+      this.openAddModal(false);
       document.getElementById('cardTitle').value = item.title || '';
       document.getElementById('cardLocation').value = item.location || item.title || '';
       document.getElementById('cardMapLink').value = item.mapLink || '';
-      this.showToast('已開啟快速排程，請選擇時段後儲存！');
+      this.showToast('已帶入景點資料，可指定時間或勾選「暫不指定時間」後儲存！');
     }
   }
 }

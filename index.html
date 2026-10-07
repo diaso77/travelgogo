@@ -80,12 +80,10 @@
         </div>
 
         <div class="header-right-controls">
-          <!-- Multi-day Range Selector: 1天 / 3天 / 5天 / 7天 -->
+          <!-- Multi-day Range Selector: 1天 / 一週 (7天) -->
           <div class="span-range-pills" id="spanRangePills" title="切換同時觀看天數">
             <button type="button" class="pill-btn active" data-days="1">1天</button>
-            <button type="button" class="pill-btn" data-days="3">3天</button>
-            <button type="button" class="pill-btn" data-days="5">5天</button>
-            <button type="button" class="pill-btn" data-days="7">7天</button>
+            <button type="button" class="pill-btn" data-days="7">一週</button>
           </div>
 
           <div class="view-switchers">
@@ -116,8 +114,31 @@
         <button type="button" class="jump-chip" data-time="21:00">🌙 21:00</button>
       </div>
 
+      <!-- All-Day / Unscheduled Places in Current Day -->
+      <div id="allDaySection" class="allday-section hidden">
+        <div class="allday-header">
+          <div class="allday-title">
+            <i data-lucide="compass"></i>
+            <span>當日彈性待訪 / 未定時間行程 (<span id="allDayCount">0</span>)</span>
+          </div>
+          <button type="button" class="btn-text-link" id="btnAddAllDayQuick" title="直接新增彈性景點">
+            <i data-lucide="plus"></i> 新增未定時間
+          </button>
+        </div>
+        <div id="allDayList" class="allday-chips-list"></div>
+      </div>
+
+      <!-- Early Morning Fold/Toggle Banner (00:00 - 06:00) -->
+      <div id="earlyMorningBanner" class="early-morning-banner">
+        <button type="button" class="btn-toggle-early" id="btnToggleEarlyHours">
+          <i data-lucide="moon" style="width:14px;height:14px;"></i>
+          <span id="earlyHoursText">點擊展開凌晨時段 (00:00 - 06:00)</span>
+          <i data-lucide="chevron-down" id="earlyHoursChevron" style="width:14px;height:14px;"></i>
+        </button>
+      </div>
+
       <!-- Vertical Timeline Mode -->
-      <div id="timelineContainer" class="timeline-container">
+      <div id="timelineContainer" class="timeline-container hide-early-hours">
         <!-- 10-min interval ruler and droppable canvas -->
         <div class="time-ruler" id="timeRuler"></div>
         <div class="schedule-canvas" id="scheduleCanvas">
@@ -200,27 +221,39 @@
           <input type="text" id="cardTitle" required placeholder="例如：晴空塔觀景台、淺草寺雷門、敘敘苑燒肉">
         </div>
 
-        <div class="form-row">
+        <div class="form-check-row" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <input type="checkbox" id="cardIsAllDay" style="width:16px;height:16px;accent-color:var(--accent-primary);cursor:pointer;">
+          <label for="cardIsAllDay" style="cursor:pointer;font-weight:600;color:var(--text-main);font-size:0.88rem;">
+            📌 暫不指定具體時間 (當天彈性待訪 / 口袋候選景點)
+          </label>
+        </div>
+
+        <div class="form-row" style="margin-bottom:6px;">
           <div class="form-group flex-1">
             <label for="cardTargetDay">安排天數 *</label>
             <select id="cardTargetDay" required></select>
           </div>
-          <div class="form-group flex-1">
-            <label for="cardStartTime">開始時間 *</label>
-            <select id="cardStartTime" required></select>
-          </div>
-          <div class="form-group flex-1">
-            <label for="cardEndTime">結束時間 *</label>
-            <select id="cardEndTime" required></select>
-          </div>
         </div>
 
-        <div class="quick-duration-row">
-          <span class="quick-duration-label">快速長度：</span>
-          <button type="button" class="duration-chip" data-min="30">+30分</button>
-          <button type="button" class="duration-chip" data-min="60">+1小時</button>
-          <button type="button" class="duration-chip" data-min="90">+1.5小時</button>
-          <button type="button" class="duration-chip" data-min="120">+2小時</button>
+        <div id="cardTimeInputsGroup">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="cardStartTime">開始時間 *</label>
+              <select id="cardStartTime" required></select>
+            </div>
+            <div class="form-group flex-1">
+              <label for="cardEndTime">結束時間 *</label>
+              <select id="cardEndTime" required></select>
+            </div>
+          </div>
+
+          <div class="quick-duration-row">
+            <span class="quick-duration-label">快速長度：</span>
+            <button type="button" class="duration-chip" data-min="30">+30分</button>
+            <button type="button" class="duration-chip" data-min="60">+1小時</button>
+            <button type="button" class="duration-chip" data-min="90">+1.5小時</button>
+            <button type="button" class="duration-chip" data-min="120">+2小時</button>
+          </div>
         </div>
 
         <div class="form-row">
